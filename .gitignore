@@ -1,4 +1,5 @@
 *.pyc
 .tox
+dist
 django_misfit.egg-info
 .coverage
