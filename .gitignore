@@ -1,0 +1,4 @@
+*.pyc
+.tox
+django_misfit.egg-info
+.coverage

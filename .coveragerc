@@ -1,0 +1,2 @@
+[run]
+omit = misfitapp/tests*,run_tests.py,*/site-packages/*,*/python?.?/*,*/pypy/*,.tox/*,/opt/python/*
