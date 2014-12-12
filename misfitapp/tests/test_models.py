@@ -4,7 +4,7 @@ from misfitapp.models import (
     MisfitUser,
     Profile,
     Sleep,
-    SleepSegment
+    SleepSegment,
     Session,
     Summary
 )
