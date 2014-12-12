@@ -3,6 +3,7 @@ from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
 from math import pow
 
+MAX_KEY_LEN = 24
 UserModel = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
 
 
@@ -20,6 +21,7 @@ class MisfitUser(models.Model):
             return self.user.username
 
 
+@python_2_unicode_compatible
 class Summary(models.Model):
     misfit_user = models.ForeignKey(MisfitUser)
     start_date = models.DateField()
@@ -29,3 +31,100 @@ class Summary(models.Model):
     calories = models.FloatField()
     activity_calories = models.FloatField()
     distance = models.FloatField()
+
+    def __str__(self):
+        return '%s to %s: %s' % (self.start_date.strftime('%Y-%m-%d'),
+                                 self.start_end.strftime('%Y-%m-%d'),
+                                 self.steps)
+
+
+@python_2_unicode_compatible
+class Profile(models.Model):
+    GENDER_TYPES = (('male', 'male'), ('female', 'female'))
+
+    misfit_user = models.ForeignKey(MisfitUser)
+    email = models.EmailField()
+    birthday = models.DateField()
+    gender = models.CharField(choices=GENDER_TYPES, max_length=6)
+
+    def __str__(self):
+        return self.email
+
+
+@python_2_unicode_compatible
+class Device(models.Model):
+    DEVICE_TYPES = (('shine', 'shine'),)
+
+    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
+    misfit_user = models.ForeignKey(MisfitUser)
+    device_type = models.CharField(choices=DEVICE_TYPES, max_length=5)
+    serial_number = models.CharField(max_length=100)
+    firmware_version = models.CharField(max_length=100)
+    batteryLevel = models.SmallIntegerField()
+
+    def __str__(self):
+        return '%s: %s' % (self.device_type, self.serial_number)
+
+
+@python_2_unicode_compatible
+class Goal(models.Model):
+    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
+    misfit_user = models.ForeignKey(MisfitUser)
+    date = models.DateField()
+    points = models.FloatField()
+    target_points = models.IntegerField()
+
+    def __str__(self):
+        return '%s %s %s of %s' % (self.id, self.date, self.points,
+                                   self.target_points)
+
+
+@python_2_unicode_compatible
+class Session(models.Model):
+    ACTIVITY_TYPES = (('cycling', 'cycling'),
+                      ('swimming', 'swimming'),
+                      ('walking', 'walking'),
+                      ('tennis', 'tennis'),
+                      ('basketball', 'basketball'),
+                      ('soccer', 'soccer'))
+
+    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
+    misfit_user = models.ForeignKey(MisfitUser)
+    activity_type = models.CharField(choices=ACTIVITY_TYPES, max_length=15)
+    start_time = models.DateTimeField()
+    duration = models.IntegerField()
+    points = models.FloatField(null=True)
+    steps = models.IntegerField(null=True)
+    calories = models.FloatField(null=True)
+    distance = models.FloatField(null=True)
+
+    def __str__(self):
+        return '%s %s %s' % (self.start_time, self.duration,
+                             self.activity_type)
+
+
+@python_2_unicode_compatible
+class Sleep(models.Model):
+    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
+    misfit_user = models.ForeignKey(MisfitUser)
+    auto_detected = models.BooleanField()
+    start_time = models.DateTimeField()
+    duration = models.IntegerField()
+
+    def __str__(self):
+        '%s %s' % (start_time, duration)
+
+
+@python_2_unicode_compatible
+class SleepSegment(models.Model):
+    AWAKE = 1
+    SLEEP = 2
+    DEEP_SLEEP = 3
+    SLEEP_TYPES = ((AWAKE, 'awake'), (SLEEP, 'sleep'), (DEEP_SLEEP, 'deep sleep'))
+
+    sleep = models.ForeignKey(Sleep)
+    time = models.DateTimeField()
+    sleep_type = models.SmallIntegerField(choices=SLEEP_TYPES)
+
+    def __str__(self):
+        '%s %s' % (time, sleep_type)
