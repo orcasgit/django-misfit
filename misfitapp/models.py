@@ -3,7 +3,6 @@ from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
 from math import pow
 
-
 UserModel = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
 
 
@@ -19,3 +18,14 @@ class MisfitUser(models.Model):
             return self.user.get_username()
         else:  # Django 1.4
             return self.user.username
+
+
+class Summary(models.Model):
+    misfit_user = models.ForeignKey(MisfitUser)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    points = models.FloatField()
+    steps = models.IntegerField()
+    calories = models.FloatField()
+    activity_calories = models.FloatField()
+    distance = models.FloatField()
