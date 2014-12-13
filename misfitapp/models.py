@@ -24,8 +24,7 @@ class MisfitUser(models.Model):
 @python_2_unicode_compatible
 class Summary(models.Model):
     misfit_user = models.ForeignKey(MisfitUser)
-    start_date = models.DateField()
-    end_date = models.DateField()
+    date = models.DateField(unique=True)
     points = models.FloatField()
     steps = models.IntegerField()
     calories = models.FloatField()
@@ -33,9 +32,7 @@ class Summary(models.Model):
     distance = models.FloatField()
 
     def __str__(self):
-        return '%s to %s: %s' % (self.start_date.strftime('%Y-%m-%d'),
-                                 self.start_end.strftime('%Y-%m-%d'),
-                                 self.steps)
+        return '%s: %s' % (self.date.strftime('%Y-%m-%d'), self.steps)
 
 
 @python_2_unicode_compatible

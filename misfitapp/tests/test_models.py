@@ -1,3 +1,4 @@
+from freezegun import freeze_time
 from misfitapp.models import (
     Device,
     Goal,
@@ -13,6 +14,7 @@ import datetime
 from .base import MisfitTestBase
 
 
+@freeze_time("2014-12-12 22:00:01")
 class TestMisfitModels(MisfitTestBase):
 
     today = datetime.date.today()
@@ -29,8 +31,7 @@ class TestMisfitModels(MisfitTestBase):
     def test_summary(self):
         """ Test the Summary Model """
         data = {'misfit_user': self.misfit_user,
-                'start_date': self.today,
-                'end_date': self.today,
+                'date': self.today,
                 'points': 3.3,
                 'steps': 3400,
                 'calories': 3000,
@@ -40,6 +41,7 @@ class TestMisfitModels(MisfitTestBase):
 
         s = Summary(**data)
         s.save()
+        self.assertEqual('%s' % s, '2014-12-12: 3400')
 
     def test_profile(self):
         """ Test the Profile Model """
