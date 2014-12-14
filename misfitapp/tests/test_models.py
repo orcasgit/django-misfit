@@ -14,11 +14,13 @@ import datetime
 from .base import MisfitTestBase
 
 
-@freeze_time("2014-12-12 22:00:01")
 class TestMisfitModels(MisfitTestBase):
 
-    today = datetime.date.today()
-    now = datetime.datetime.now()
+    @freeze_time("2014-12-12 22:00:01")
+    def setUp(self):
+        self.today = datetime.date.today()
+        self.now = datetime.datetime.now()
+        super(TestMisfitModels, self).setUp()
 
     def test_misfit_user(self):
         """ MisfitUser was already created in base, now test the properties """
