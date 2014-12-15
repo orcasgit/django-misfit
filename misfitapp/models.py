@@ -24,7 +24,7 @@ class MisfitUser(models.Model):
 @python_2_unicode_compatible
 class Summary(models.Model):
     misfit_user = models.ForeignKey(MisfitUser)
-    date = models.DateField(unique=True)
+    date = models.DateField()
     points = models.FloatField()
     steps = models.IntegerField()
     calories = models.FloatField()
@@ -33,6 +33,9 @@ class Summary(models.Model):
 
     def __str__(self):
         return '%s: %s' % (self.date.strftime('%Y-%m-%d'), self.steps)
+
+    class Meta:
+        unique_together = ('misfit_user', 'date')
 
 
 @python_2_unicode_compatible
