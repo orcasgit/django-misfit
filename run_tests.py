@@ -41,7 +41,10 @@ if not settings.configured:
                     'level': 'DEBUG',
                     'class': 'django.utils.log.NullHandler',
                 },
-            }
+            },
+            'loggers': {
+                'misfitapp.tasks': {'handlers': ['null'], 'level': 'DEBUG'},
+            },
         },
 
         MIDDLEWARE_CLASSES = (

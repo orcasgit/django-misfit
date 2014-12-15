@@ -11,10 +11,12 @@ from django.http import HttpResponse, Http404
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_POST
+from misfit.notification import MisfitNotification
 
 from . import utils
 from .models import MisfitUser
+from .tasks import process_notification
 
 
 @login_required
@@ -148,3 +150,10 @@ def logout(request):
     next_url = request.GET.get('next', None) or utils.get_setting(
         'MISFIT_LOGOUT_REDIRECT')
     return redirect(next_url)
+
+
+@csrf_exempt
+@require_POST
+def notification(request):
+    process_notification.delay(request.body)
+    return HttpResponse()
