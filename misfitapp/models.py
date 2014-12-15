@@ -42,10 +42,11 @@ class Summary(models.Model):
 class Profile(models.Model):
     GENDER_TYPES = (('male', 'male'), ('female', 'female'))
 
-    misfit_user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(MisfitUser, unique=True)
     email = models.EmailField()
     birthday = models.DateField()
     gender = models.CharField(choices=GENDER_TYPES, max_length=6)
+    name = models.TextField()
 
     def __str__(self):
         return self.email
@@ -56,11 +57,11 @@ class Device(models.Model):
     DEVICE_TYPES = (('shine', 'shine'),)
 
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    misfit_user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(MisfitUser)
     device_type = models.CharField(choices=DEVICE_TYPES, max_length=5)
     serial_number = models.CharField(max_length=100)
     firmware_version = models.CharField(max_length=100)
-    batteryLevel = models.SmallIntegerField()
+    battery_level = models.SmallIntegerField()
 
     def __str__(self):
         return '%s: %s' % (self.device_type, self.serial_number)
@@ -69,7 +70,7 @@ class Device(models.Model):
 @python_2_unicode_compatible
 class Goal(models.Model):
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    misfit_user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(MisfitUser)
     date = models.DateField()
     points = models.FloatField()
     target_points = models.IntegerField()
@@ -89,7 +90,7 @@ class Session(models.Model):
                       ('soccer', 'soccer'))
 
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    misfit_user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(MisfitUser)
     activity_type = models.CharField(choices=ACTIVITY_TYPES, max_length=15)
     start_time = models.DateTimeField()
     duration = models.IntegerField()
@@ -106,7 +107,7 @@ class Session(models.Model):
 @python_2_unicode_compatible
 class Sleep(models.Model):
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    misfit_user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(MisfitUser)
     auto_detected = models.BooleanField()
     start_time = models.DateTimeField()
     duration = models.IntegerField()

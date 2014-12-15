@@ -11,7 +11,7 @@ from misfit.exceptions import MisfitRateLimitError
 from misfit.notification import MisfitNotification
 
 from . import utils
-from .models import MisfitUser, Summary
+from .models import MisfitUser, Profile, Device, Session, SleepSegment, Summary, Goal
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,10 @@ def cc_to_underscore(name):
     """ Convert camelCase name to under_score """
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+def cc_to_underscore_keys(dictionary):
+    """ Convert dictionary keys from camelCase to under_score """
+    return dict((cc_to_underscore(key), val) for key, val in dictionary.items())
 
 
 @shared_task
@@ -49,11 +53,20 @@ def process_notification(content):
                                'in our database with id: %s' % ownerId)
                 continue
             misfit = utils.create_misfit(access_token=mfuser[0].access_token)
-            if message['type'] == 'goals':
-                goal = misfit.goal(object_id=message['id'])
-                # TODO: make goal updates to the DB
+
+            if message['type'] == 'profiles':
+                process_profile(message, misfit)
+            elif message['type'] == 'devices':
+                process_device(message, misfit)
+            elif message['type'] == 'sessions':
+                process_session(message, misfit)
+            elif message['type'] == 'sleeps':
+                process_sleep(message, misfit)
+            elif message['type'] == 'goals':
+                process_goal(message, misfit)
 
                 # Adjust date range for later summary retrieval
+                goal = misfit.goal(object_id=message['id'])
                 if not ownerId in date_ranges:
                     date_ranges[ownerId] = {'start_date': goal.date,
                                             'end_date': goal.date}
@@ -61,7 +74,7 @@ def process_notification(content):
                     date_ranges[ownerId]['start_date'] = goal.date
                 elif goal.date > date_ranges[ownerId]['end_date']:
                     date_ranges[ownerId]['end_date'] = goal.date
-            # TODO: make profile, device, session, and sleep updates to the DB
+
 
         # Use the date ranges we built to get summary data for each user
         for ownerId, date_range in date_ranges.items():
@@ -92,3 +105,43 @@ def process_notification(content):
         exc = sys.exc_info()[1]
         logger.exception("Unknown exception processing notification: %s" % exc)
         raise Reject(exc, requeue=False)
+
+
+
+def process_profile(message, misfit):
+    if message['action'] == 'deleted':
+        Profile.objects.filter(user_id=message['ownerId']).delete()
+    elif message['action'] == 'created':
+        data = cc_to_underscore_keys(misfit.profile().data)
+        p = Profile(user_id=data.pop('user_id'), **data)
+        p.save()
+    elif message['action'] == 'updated':
+        data = cc_to_underscore_keys(misfit.profile().data)
+        Profile.objects.get_or_create(user_id=data.pop('user_id'), defaults=data)
+    else:
+        raise Exception("Unknown message action: %s" % message['action'])
+
+
+def process_device(message, misfit):
+    if message['action'] == 'deleted':
+        Device.objects.filter(pk=message['id']).delete()
+    elif message['action'] == 'created':
+        data = cc_to_underscore_keys(misfit.device().data)
+        p = Device(pk=message['id'], user_id=message['ownerId'], **data)
+        p.save()
+    elif message['action'] == 'updated':
+        data = cc_to_underscore_keys(misfit.device().data)
+        Device.objects.get_or_create(pk=message['id'], user_id=message['ownerId'], defaults=data)
+    else:
+        raise Exception("Unknown message action: %s" % message['action'])
+
+
+def process_session(message, misfit):
+    pass
+
+def process_sleep(message, misfit):
+    pass
+
+def process_goal(message, misfit):
+    pass
+ 

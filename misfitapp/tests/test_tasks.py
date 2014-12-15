@@ -17,8 +17,8 @@ from mock import MagicMock, patch
 from nose.tools import eq_
 
 from misfitapp import utils
-from misfitapp.models import MisfitUser, Goal, Profile, Summary
-from misfitapp.tasks import process_notification
+from misfitapp.models import MisfitUser, Device, Goal, Profile, Summary
+from misfitapp.tasks import process_notification, process_profile, process_device
 
 try:
     from io import BytesIO
@@ -47,6 +47,20 @@ class JsonMock:
         with open(file_path) as json_file:
             response['content'] = json_file.read().encode('utf8')
         return response
+
+    @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
+              path='/move/resource/v1/user/me/device/.*')
+    def device_http(self, url, *args):
+        """ Method to return the contents of a device json file """
+        self.file_name_base = 'device'
+        return self.json_file()
+
+    @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
+              path='/move/resource/v1/user/me/profile/.*')
+    def profile_http(self, url, *args):
+        """ Method to return the contents of a profile json file """
+        self.file_name_base = 'profile_' + url.path.split('/')[-2]
+        return self.json_file()
 
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
               path='/move/resource/v1/user/me/activity/goals/.*')
@@ -127,6 +141,7 @@ class TestNotificationTask(MisfitTestBase):
         self.assertEqual(Profile.objects.count(), 0)
         self.assertEqual(Summary.objects.count(), 0)
 
+
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_notification(self, verify_signature_mock):
         """
@@ -139,3 +154,88 @@ class TestNotificationTask(MisfitTestBase):
             self.client.post(reverse('misfit-notification'), data=content,
                              content_type='application/json')
         eq_(Summary.objects.filter(misfit_user=self.misfit_user).count(), 3)
+
+
+
+    def test_profile(self):
+
+        # Create
+        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        eq_(Profile.objects.all().count(), 0)
+        with HTTMock(JsonMock().profile_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "profiles",
+                        "action": "created",
+                        "id": "11a4189acf12e53f81000001",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_profile(message, misfit)
+        eq_(Profile.objects.all().count(), 1)
+        eq_(Profile.objects.all()[0].user_id, self.misfit_user_id)
+        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 1)
+
+
+        # Update
+        with HTTMock(JsonMock().profile_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "profiles",
+                        "action": "updated",
+                        "id": "11a4189acf12e53f81000001",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_profile(message, misfit)
+        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 1)
+
+        # Delete
+        message = { "type": "profiles",
+                    "action": "deleted",
+                    "id": "11a4189acf12e53f81000001",
+                    "ownerId": self.misfit_user_id,
+                    "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+        process_profile(message, misfit)
+        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 0)
+
+
+    def test_device(self):
+
+        # Create
+        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        eq_(Device.objects.all().count(), 0)
+        with HTTMock(JsonMock().device_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "devices",
+                        "action": "created",
+                        "id": "21a4189acf12e53f81000001",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_device(message, misfit)
+        eq_(Device.objects.all().count(), 1)
+        eq_(Device.objects.all()[0].user_id, self.misfit_user_id)
+        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 1)
+
+
+        # Update
+        with HTTMock(JsonMock().device_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "devices",
+                        "action": "updated",
+                        "id": "21a4189acf12e53f81000001",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_device(message, misfit)
+        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 1)
+
+        # Delete
+        message = { "type": "devices",
+                    "action": "deleted",
+                    "id": "21a4189acf12e53f81000001",
+                    "ownerId": self.misfit_user_id,
+                    "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+        process_device(message, misfit)
+        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 0)

@@ -25,7 +25,7 @@ class MisfitTestBase(TestCase):
         self.password = self.random_string(25)
         self.user = self.create_user(username=self.username,
                                      password=self.password)
-        self.misfit_user_id = str(random.randint(111111, 999999))
+        self.misfit_user_id = '51a4189acf12e53f79000001'
         self.access_token = self.random_string(25)
         self.misfit_user = self.create_misfit_user(user=self.user)
         self.profile = MisfitProfile({
