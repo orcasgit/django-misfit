@@ -10,7 +10,7 @@ UserModel = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
 @python_2_unicode_compatible
 class MisfitUser(models.Model):
     user = models.ForeignKey(UserModel)
-    misfit_user_id = models.CharField(max_length=24)
+    misfit_user_id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
     access_token = models.TextField()
     last_update = models.DateTimeField(null=True, blank=True)
 
