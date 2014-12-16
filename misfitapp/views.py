@@ -66,7 +66,9 @@ def complete(request):
         `misfit-complete`
     """
     try:
-        auth = utils.create_misfit_auth(state=request.session.pop('state'))
+        redirect_uri = request.build_absolute_uri(reverse('misfit-complete'))
+        auth = utils.create_misfit_auth(state=request.session.pop('state'),
+                                        redirect_uri=redirect_uri)
         access_token = auth.fetch_token(request.GET['code'],
                                         request.GET['state'])
     except:
