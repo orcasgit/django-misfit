@@ -75,7 +75,6 @@ def process_notification(content):
                 elif goal.date > date_ranges[ownerId]['end_date']:
                     date_ranges[ownerId]['end_date'] = goal.date
 
-
         # Use the date ranges we built to get summary data for each user
         for ownerId, date_range in date_ranges.items():
             mfusers = MisfitUser.objects.filter(misfit_user_id=ownerId)
@@ -86,9 +85,9 @@ def process_notification(content):
                     summary_data = dict((cc_to_underscore(key), val)
                                         for key, val in summary.data.items())
                     existing_summ = Summary.objects.filter(
-                        date=summary.date.datetime)
+                        date=summary.date.date)
                     if existing_summ.exists():
-                        existing_summ[0].update(**summary_data)
+                        existing_summ.update(**summary_data)
                     else:
                         summary_data['misfit_user'] = mfuser
                         Summary.objects.create(**summary_data)
@@ -107,41 +106,55 @@ def process_notification(content):
         raise Reject(exc, requeue=False)
 
 
-
-def process_profile(message, misfit):
+def process_device(message, misfit):
     if message['action'] == 'deleted':
-        Profile.objects.filter(user_id=message['ownerId']).delete()
-    elif message['action'] == 'created':
-        data = cc_to_underscore_keys(misfit.profile().data)
-        p = Profile(user_id=data.pop('user_id'), **data)
-        p.save()
-    elif message['action'] == 'updated':
-        data = cc_to_underscore_keys(misfit.profile().data)
-        Profile.objects.get_or_create(user_id=data.pop('user_id'), defaults=data)
+        Device.objects.filter(pk=message['id']).delete()
+    elif message['action'] == 'created' or message['action'] == 'updated':
+        data = cc_to_underscore_keys(misfit.device().data)
+        d, created = Device.objects.get_or_create(user_id=message['ownerId'], defaults=data)
+        if not created:
+            for attr, val in data.iteritems():
+                setattr(d, attr, val)
+            d.save()
     else:
         raise Exception("Unknown message action: %s" % message['action'])
 
 
-def process_device(message, misfit):
+def process_goal(message, misfit):
+    pass
+
+
+def process_profile(message, misfit):
     if message['action'] == 'deleted':
-        Device.objects.filter(pk=message['id']).delete()
-    elif message['action'] == 'created':
-        data = cc_to_underscore_keys(misfit.device().data)
-        p = Device(pk=message['id'], user_id=message['ownerId'], **data)
-        p.save()
-    elif message['action'] == 'updated':
-        data = cc_to_underscore_keys(misfit.device().data)
-        Device.objects.get_or_create(pk=message['id'], user_id=message['ownerId'], defaults=data)
+        Profile.objects.filter(user_id=message['ownerId']).delete()
+    elif message['action'] == 'created' or message['action'] == 'updated':
+        data = cc_to_underscore_keys(misfit.profile().data)
+        p, created = Profile.objects.get_or_create(user_id=data.pop('user_id'), defaults=data)
+        if not created:
+            for attr, val in data.iteritems():
+                setattr(p, attr, val)
+            p.save()
     else:
         raise Exception("Unknown message action: %s" % message['action'])
 
 
 def process_session(message, misfit):
-    pass
+    if message['action'] == 'deleted':
+        Session.objects.filter(pk=message['id']).delete()
+    elif message['action'] == 'created' or message['action'] == 'updated':
+        data = cc_to_underscore_keys(misfit.session(object_id=message['id']).data)
+        data['user_id'] = message['ownerId']
+        s, created = Session.objects.get_or_create(id=message['id'], defaults=data)
+        if not created:
+            for attr, val in data.iteritems():
+                setattr(s, attr, val)
+            s.save()
+    else:
+        raise Exception("Unknown message action: %s" % message['action'])
+
 
 def process_sleep(message, misfit):
     pass
 
-def process_goal(message, misfit):
-    pass
+
  
