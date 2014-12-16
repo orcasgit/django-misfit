@@ -56,10 +56,10 @@ class JsonMock:
         return self.json_file()
 
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
-              path='/move/resource/v1/user/me/profile/.*')
+              path='/move/resource/v1/user/.*/profile/*')
     def profile_http(self, url, *args):
         """ Method to return the contents of a profile json file """
-        self.file_name_base = 'profile_' + url.path.split('/')[-2]
+        self.file_name_base = 'profile'
         return self.json_file()
 
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
