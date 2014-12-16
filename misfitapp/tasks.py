@@ -47,23 +47,24 @@ def process_notification(content):
         date_ranges = {}
         for message in notification.Message:
             ownerId = message['ownerId']
-            mfuser = MisfitUser.objects.filter(misfit_user_id=ownerId)
-            if not mfuser.exists():
+            try:
+                mfuser = MisfitUser.objects.get(misfit_user_id=ownerId)
+            except mfuser.DoesNotExist:
                 logger.warning('Received a notification for a user who is not '
                                'in our database with id: %s' % ownerId)
                 continue
-            misfit = utils.create_misfit(access_token=mfuser[0].access_token)
+            misfit = utils.create_misfit(access_token=mfuser.access_token)
 
             if message['type'] == 'profiles':
-                process_profile(message, misfit)
+                process_profile(message, misfit, mfuser.user_id)
             elif message['type'] == 'devices':
-                process_device(message, misfit)
+                process_device(message, misfit, mfuser.user_id)
             elif message['type'] == 'sessions':
-                process_session(message, misfit)
+                process_session(message, misfit, mfuser.user_id)
             elif message['type'] == 'sleeps':
-                process_sleep(message, misfit)
+                process_sleep(message, misfit, mfuser.user_id)
             elif message['type'] == 'goals':
-                process_goal(message, misfit)
+                process_goal(message, misfit, mfuser.user_id)
 
                 # Adjust date range for later summary retrieval
                 goal = misfit.goal(object_id=message['id'])
@@ -77,20 +78,21 @@ def process_notification(content):
 
         # Use the date ranges we built to get summary data for each user
         for ownerId, date_range in date_ranges.items():
-            mfusers = MisfitUser.objects.filter(misfit_user_id=ownerId)
-            for mfuser in mfusers:
-                misfit = utils.create_misfit(access_token=mfuser.access_token)
-                summaries = misfit.summary(detail=True, **date_range)
-                for summary in summaries:
-                    summary_data = dict((cc_to_underscore(key), val)
-                                        for key, val in summary.data.items())
-                    existing_summ = Summary.objects.filter(
-                        date=summary.date.date)
-                    if existing_summ.exists():
-                        existing_summ.update(**summary_data)
-                    else:
-                        summary_data['misfit_user'] = mfuser
-                        Summary.objects.create(**summary_data)
+            try:
+                mfuser = MisfitUser.objects.get(misfit_user_id=ownerId)
+            except MisfitUser.DoesNotExist:
+                logger.warning('Count not find Misfit user %s' % ownderId)
+
+            misfit = utils.create_misfit(access_token=mfuser.access_token)
+            summaries = misfit.summary(detail=True, **date_range)
+            for summary in summaries:
+                data = cc_to_underscore_keys(summary.data)
+                s, created = Summary.objects.get_or_create(user_id=mfuser.user_id, date=data['date'], defaults=data)
+                if not created:
+                    for attr, val in data.iteritems():
+                        setattr(s, attr, val)
+                    s.save()
+
     except MisfitRateLimitError:
         # We have hit the rate limit for the user, retry when it's reset,
         # according to the header in the reply from the failing API call
@@ -106,12 +108,12 @@ def process_notification(content):
         raise Reject(exc, requeue=False)
 
 
-def process_device(message, misfit):
+def process_device(message, misfit, uid):
     if message['action'] == 'deleted':
         Device.objects.filter(pk=message['id']).delete()
     elif message['action'] == 'created' or message['action'] == 'updated':
         data = cc_to_underscore_keys(misfit.device().data)
-        d, created = Device.objects.get_or_create(user_id=message['ownerId'], defaults=data)
+        d, created = Device.objects.get_or_create(user_id=uid, defaults=data)
         if not created:
             for attr, val in data.iteritems():
                 setattr(d, attr, val)
@@ -120,16 +122,17 @@ def process_device(message, misfit):
         raise Exception("Unknown message action: %s" % message['action'])
 
 
-def process_goal(message, misfit):
+def process_goal(message, misfit, uid):
     pass
 
 
-def process_profile(message, misfit):
+def process_profile(message, misfit, uid):
     if message['action'] == 'deleted':
-        Profile.objects.filter(user_id=message['ownerId']).delete()
+        Profile.objects.filter(user_id=uid).delete()
     elif message['action'] == 'created' or message['action'] == 'updated':
         data = cc_to_underscore_keys(misfit.profile().data)
-        p, created = Profile.objects.get_or_create(user_id=data.pop('user_id'), defaults=data)
+        data.pop('user_id')
+        p, created = Profile.objects.get_or_create(user_id=uid, defaults=data)
         if not created:
             for attr, val in data.iteritems():
                 setattr(p, attr, val)
@@ -138,12 +141,12 @@ def process_profile(message, misfit):
         raise Exception("Unknown message action: %s" % message['action'])
 
 
-def process_session(message, misfit):
+def process_session(message, misfit, uid):
     if message['action'] == 'deleted':
         Session.objects.filter(pk=message['id']).delete()
     elif message['action'] == 'created' or message['action'] == 'updated':
         data = cc_to_underscore_keys(misfit.session(object_id=message['id']).data)
-        data['user_id'] = message['ownerId']
+        data['user_id'] = uid
         s, created = Session.objects.get_or_create(id=message['id'], defaults=data)
         if not created:
             for attr, val in data.iteritems():
@@ -153,7 +156,7 @@ def process_session(message, misfit):
         raise Exception("Unknown message action: %s" % message['action'])
 
 
-def process_sleep(message, misfit):
+def process_sleep(message, misfit, uid):
     pass
 
 

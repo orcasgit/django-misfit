@@ -23,7 +23,7 @@ class MisfitUser(models.Model):
 
 @python_2_unicode_compatible
 class Summary(models.Model):
-    misfit_user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(UserModel)
     date = models.DateField()
     points = models.FloatField()
     steps = models.IntegerField()
@@ -35,14 +35,14 @@ class Summary(models.Model):
         return '%s: %s' % (self.date.strftime('%Y-%m-%d'), self.steps)
 
     class Meta:
-        unique_together = ('misfit_user', 'date')
+        unique_together = ('user', 'date')
 
 
 @python_2_unicode_compatible
 class Profile(models.Model):
     GENDER_TYPES = (('male', 'male'), ('female', 'female'))
 
-    user = models.ForeignKey(MisfitUser, unique=True)
+    user = models.ForeignKey(UserModel, unique=True)
     email = models.EmailField()
     birthday = models.DateField()
     gender = models.CharField(choices=GENDER_TYPES, max_length=6)
@@ -57,7 +57,7 @@ class Device(models.Model):
     DEVICE_TYPES = (('shine', 'shine'),)
 
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(UserModel)
     device_type = models.CharField(choices=DEVICE_TYPES, max_length=5)
     serial_number = models.CharField(max_length=100)
     firmware_version = models.CharField(max_length=100)
@@ -70,7 +70,7 @@ class Device(models.Model):
 @python_2_unicode_compatible
 class Goal(models.Model):
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(UserModel)
     date = models.DateField()
     points = models.FloatField()
     target_points = models.IntegerField()
@@ -90,7 +90,7 @@ class Session(models.Model):
                       ('soccer', 'soccer'))
 
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(UserModel)
     activity_type = models.CharField(choices=ACTIVITY_TYPES, max_length=15)
     start_time = models.DateTimeField()
     duration = models.IntegerField()
@@ -107,7 +107,7 @@ class Session(models.Model):
 @python_2_unicode_compatible
 class Sleep(models.Model):
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(MisfitUser)
+    user = models.ForeignKey(UserModel)
     auto_detected = models.BooleanField()
     start_time = models.DateTimeField()
     duration = models.IntegerField()

@@ -32,7 +32,7 @@ class TestMisfitModels(MisfitTestBase):
 
     def test_summary(self):
         """ Test the Summary Model """
-        data = {'misfit_user': self.misfit_user,
+        data = {'user_id': self.user.pk,
                 'date': self.today,
                 'points': 3.3,
                 'steps': 3400,
@@ -48,7 +48,7 @@ class TestMisfitModels(MisfitTestBase):
     def test_profile(self):
         """ Test the Profile Model """
 
-        data = {'user_id': self.misfit_user,
+        data = {'user_id': self.user.pk,
                 'email': 'test@example.com',
                 'birthday': self.today,
                 'gender': 'male',
@@ -59,7 +59,7 @@ class TestMisfitModels(MisfitTestBase):
     def test_device(self):
         """ Test the Device Model """
         data = {'id': self.random_string(24),
-                'user_id': self.misfit_user,
+                'user_id': self.user.pk,
                 'device_type': 'shine',
                 'serial_number': self.random_string(10),
                 'firmware_version': self.random_string(40),
@@ -71,7 +71,7 @@ class TestMisfitModels(MisfitTestBase):
     def test_goal(self):
         """ Test the Goal Model """
         data = {'id': self.random_string(24),
-                'user_id': self.misfit_user,
+                'user_id': self.user.pk,
                 'date': self.today,
                 'points': 64.2,
                 'target_points': 200,
@@ -82,7 +82,7 @@ class TestMisfitModels(MisfitTestBase):
     def test_session(self):
         """ Test the Session Model """
         data = {'id': self.random_string(24),
-                'user_id': self.misfit_user,
+                'user_id': self.user.pk,
                 'activity_type': 'soccer',
                 'start_time': self.now,
                 'duration': 300,
@@ -94,7 +94,7 @@ class TestMisfitModels(MisfitTestBase):
     def test_sleep(self):
         """ Test the Sleep and Sleep Segment model """
         data = {'id': self.random_string(24),
-                'user_id': self.misfit_user,
+                'user_id': self.user.pk,
                 'auto_detected': True,
                 'start_time': self.now,
                 'duration': 300,

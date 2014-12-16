@@ -166,13 +166,13 @@ class TestNotificationTask(MisfitTestBase):
                      JsonMock('summary_detail').summary_http):
             self.client.post(reverse('misfit-notification'), data=content,
                              content_type='application/json')
-        eq_(Summary.objects.filter(misfit_user=self.misfit_user).count(), 3)
+        eq_(Summary.objects.filter(user=self.user).count(), 3)
 
 
     def test_device(self):
 
         # Create
-        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        eq_(Device.objects.filter(user_id=self.user.pk).count(), 0)
         eq_(Device.objects.all().count(), 0)
         with HTTMock(JsonMock().device_http):
             misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
@@ -182,10 +182,10 @@ class TestNotificationTask(MisfitTestBase):
                         "ownerId": self.misfit_user_id,
                         "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-            process_device(message, misfit)
+            process_device(message, misfit, self.user.pk)
         eq_(Device.objects.all().count(), 1)
-        eq_(Device.objects.all()[0].user_id, self.misfit_user_id)
-        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 1)
+        eq_(Device.objects.all()[0].user_id, self.user.pk)
+        eq_(Device.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Update
         with HTTMock(JsonMock().device_http):
@@ -196,8 +196,8 @@ class TestNotificationTask(MisfitTestBase):
                         "ownerId": self.misfit_user_id,
                         "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-            process_device(message, misfit)
-        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 1)
+            process_device(message, misfit, self.user.pk)
+        eq_(Device.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Delete
         message = { "type": "devices",
@@ -206,8 +206,8 @@ class TestNotificationTask(MisfitTestBase):
                     "ownerId": self.misfit_user_id,
                     "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-        process_device(message, misfit)
-        eq_(Device.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        process_device(message, misfit, self.user.pk)
+        eq_(Device.objects.filter(user_id=self.user.pk).count(), 0)
 
 
     def test_goal(self):
@@ -217,7 +217,7 @@ class TestNotificationTask(MisfitTestBase):
     def test_profile(self):
 
         # Create
-        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        eq_(Profile.objects.filter(user_id=self.user.pk).count(), 0)
         eq_(Profile.objects.all().count(), 0)
         with HTTMock(JsonMock().profile_http):
             misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
@@ -227,10 +227,10 @@ class TestNotificationTask(MisfitTestBase):
                         "ownerId": self.misfit_user_id,
                         "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-            process_profile(message, misfit)
+            process_profile(message, misfit, self.user.pk)
         eq_(Profile.objects.all().count(), 1)
-        eq_(Profile.objects.all()[0].user_id, self.misfit_user_id)
-        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 1)
+        eq_(Profile.objects.all()[0].user_id, self.user.pk)
+        eq_(Profile.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Update
         with HTTMock(JsonMock().profile_http):
@@ -241,8 +241,8 @@ class TestNotificationTask(MisfitTestBase):
                         "ownerId": self.misfit_user_id,
                         "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-            process_profile(message, misfit)
-        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 1)
+            process_profile(message, misfit, self.user.pk)
+        eq_(Profile.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Delete
         message = { "type": "profiles",
@@ -251,14 +251,14 @@ class TestNotificationTask(MisfitTestBase):
                     "ownerId": self.misfit_user_id,
                     "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-        process_profile(message, misfit)
-        eq_(Profile.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        process_profile(message, misfit, self.user.pk)
+        eq_(Profile.objects.filter(user_id=self.user.pk).count(), 0)
 
 
     def test_session(self):
 
         # Create
-        eq_(Session.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        eq_(Session.objects.filter(user_id=self.user.pk).count(), 0)
         eq_(Session.objects.all().count(), 0)
         with HTTMock(JsonMock().session_http):
             misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
@@ -268,10 +268,10 @@ class TestNotificationTask(MisfitTestBase):
                         "ownerId": self.misfit_user_id,
                         "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-            process_session(message, misfit)
+            process_session(message, misfit, self.user.pk)
         eq_(Session.objects.all().count(), 1)
-        eq_(Session.objects.all()[0].user_id, self.misfit_user_id)
-        eq_(Session.objects.filter(user_id=self.misfit_user_id).count(), 1)
+        eq_(Session.objects.all()[0].user_id, self.user.pk)
+        eq_(Session.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Update
         with HTTMock(JsonMock().session_http):
@@ -282,8 +282,8 @@ class TestNotificationTask(MisfitTestBase):
                         "ownerId": self.misfit_user_id,
                         "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-            process_session(message, misfit)
-        eq_(Session.objects.filter(user_id=self.misfit_user_id).count(), 1)
+            process_session(message, misfit, self.user.pk)
+        eq_(Session.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Delete
         message = { "type": "sessions",
@@ -292,8 +292,8 @@ class TestNotificationTask(MisfitTestBase):
                     "ownerId": self.misfit_user_id,
                     "updatedAt": "2014-10-17 12:00:00 UTC"
                     }
-        process_session(message, misfit)
-        eq_(Session.objects.filter(user_id=self.misfit_user_id).count(), 0)
+        process_session(message, misfit, self.user.pk)
+        eq_(Session.objects.filter(user_id=self.user.pk).count(), 0)
 
 
     def test_sleep(self):
