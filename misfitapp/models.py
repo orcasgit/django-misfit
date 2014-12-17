@@ -130,3 +130,6 @@ class SleepSegment(models.Model):
 
     def __str__(self):
         '%s %s' % (time, sleep_type)
+
+    class Meta:
+        unique_together = ('sleep', 'time')

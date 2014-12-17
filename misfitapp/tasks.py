@@ -11,7 +11,7 @@ from misfit.exceptions import MisfitRateLimitError
 from misfit.notification import MisfitNotification
 
 from . import utils
-from .models import MisfitUser, Profile, Device, Session, SleepSegment, Summary, Goal
+from .models import MisfitUser, Profile, Device, Session, Sleep, SleepSegment, Summary, Goal
 
 
 logger = logging.getLogger(__name__)
@@ -168,7 +168,26 @@ def process_session(message, misfit, uid):
 
 
 def process_sleep(message, misfit, uid):
-    pass
+    if message['action'] == 'deleted':
+        Sleep.objects.filter(pk=message['id']).delete()
+    elif message['action'] == 'created' or message['action'] == 'updated':
+        data = cc_to_underscore_keys(misfit.sleep(object_id=message['id']).data)
+        data['user_id'] = uid
+        segments = data.pop('sleep_details')
+        s, created = Sleep.objects.get_or_create(id=message['id'], defaults=data)
+        if not created:
+            for attr, val in data.iteritems():
+                setattr(s, attr, val)
+            s.save()
+            # For simplicity, remove existing segments on updates, then save the complete list
+            SleepSegment.objects.filter(sleep=s).delete()
+        seg_list = []
+        for seg in segments:
+            seg_list.append(SleepSegment(sleep=s, time=seg['datetime'], sleep_type=seg['value']))
+        SleepSegment.objects.bulk_create(seg_list)
+
+    else:
+        raise Exception("Unknown message action: %s" % message['action'])
 
 
  

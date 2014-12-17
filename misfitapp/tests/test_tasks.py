@@ -17,13 +17,14 @@ from mock import MagicMock, patch
 from nose.tools import eq_
 
 from misfitapp import utils
-from misfitapp.models import MisfitUser, Device, Goal, Profile, Session, Summary
+from misfitapp.models import MisfitUser, Device, Goal, Profile, Session, Sleep, SleepSegment, Summary
 from misfitapp.tasks import (
     process_notification,
     process_device,
     process_goal,
     process_profile,
     process_session,
+    process_sleep,
     )
 
 try:
@@ -80,6 +81,13 @@ class JsonMock:
     def profile_http(self, url, *args):
         """ Method to return the contents of a profile json file """
         self.file_name_base = 'profile'
+        return self.json_file()
+
+    @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
+              path='/move/resource/v1/user/me/activity/sleeps/.*')
+    def sleep_http(self, url, *args):
+        """ Method to return the contents of a goal json file """
+        self.file_name_base = 'sleep_' + url.path.split('/')[-2]
         return self.json_file()
 
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
@@ -334,5 +342,47 @@ class TestNotificationTask(MisfitTestBase):
         eq_(Session.objects.filter(user_id=self.user.pk).count(), 0)
 
 
-    def test_sleep(self):
-        pass
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    def test_sleep(self, verify_signature_mock):
+
+        # Create
+        eq_(Sleep.objects.filter(user_id=self.user.pk).count(), 0)
+        eq_(Sleep.objects.all().count(), 0)
+        with HTTMock(JsonMock().sleep_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "sleeps",
+                        "action": "created",
+                        "id": "548f84cd33822a9b48061f19",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_sleep(message, misfit, self.user.pk)
+        eq_(Sleep.objects.all().count(), 1)
+        sleep = Sleep.objects.all()[0]
+        eq_(sleep.user_id, self.user.pk)
+        eq_(Sleep.objects.filter(user_id=self.user.pk).count(), 1)
+        eq_(SleepSegment.objects.filter(sleep=sleep).count(), 4)
+
+        # Update
+        with HTTMock(JsonMock().sleep_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "sleeps",
+                        "action": "updated",
+                        "id": "548f84cd33822a9b48061f19",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_sleep(message, misfit, self.user.pk)
+        eq_(Sleep.objects.filter(user_id=self.user.pk).count(), 1)
+        eq_(SleepSegment.objects.filter(sleep=sleep).count(), 4)
+
+        # Delete
+        message = { "type": "sleeps",
+                    "action": "deleted",
+                    "id": "548f84cd33822a9b48061f19",
+                    "ownerId": self.misfit_user_id,
+                    "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+        process_sleep(message, misfit, self.user.pk)
+        eq_(Sleep.objects.filter(user_id=self.user.pk).count(), 0)
+        eq_(SleepSegment.objects.filter(sleep=sleep).count(), 0)
