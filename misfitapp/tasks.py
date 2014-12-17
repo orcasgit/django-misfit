@@ -123,7 +123,18 @@ def process_device(message, misfit, uid):
 
 
 def process_goal(message, misfit, uid):
-    pass
+    if message['action'] == 'deleted':
+        Goal.objects.filter(pk=message['id']).delete()
+    elif message['action'] == 'created' or message['action'] == 'updated':
+        data = cc_to_underscore_keys(misfit.goal(object_id=message['id']).data)
+        data['user_id'] = uid
+        d, created = Goal.objects.get_or_create(pk=message['id'], defaults=data)
+        if not created:
+            for attr, val in data.iteritems():
+                setattr(d, attr, val)
+            d.save()
+    else:
+        raise Exception("Unknown message action: %s" % message['action'])
 
 
 def process_profile(message, misfit, uid):

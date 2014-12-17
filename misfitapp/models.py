@@ -74,6 +74,7 @@ class Goal(models.Model):
     date = models.DateField()
     points = models.FloatField()
     target_points = models.IntegerField()
+    time_zone_offset = models.SmallIntegerField(default=0)
 
     def __str__(self):
         return '%s %s %s of %s' % (self.id, self.date, self.points,

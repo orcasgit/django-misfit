@@ -166,6 +166,8 @@ class TestNotificationTask(MisfitTestBase):
                      JsonMock('summary_detail').summary_http):
             self.client.post(reverse('misfit-notification'), data=content,
                              content_type='application/json')
+        eq_(Goal.objects.filter(user=self.user).count(), 2)
+        eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 3)
 
 
@@ -211,8 +213,44 @@ class TestNotificationTask(MisfitTestBase):
 
 
     def test_goal(self):
-        pass
 
+        # Create
+        eq_(Goal.objects.filter(user_id=self.user.pk).count(), 0)
+        eq_(Goal.objects.all().count(), 0)
+        with HTTMock(JsonMock().goal_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "goals",
+                        "action": "created",
+                        "id": "548b1b3d33822a17a23f4e62",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_goal(message, misfit, self.user.pk)
+        eq_(Goal.objects.all().count(), 1)
+        eq_(Goal.objects.all()[0].user_id, self.user.pk)
+        eq_(Goal.objects.filter(user_id=self.user.pk).count(), 1)
+
+        # Update
+        with HTTMock(JsonMock().goal_http):
+            misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+            message = { "type": "goals",
+                        "action": "updated",
+                        "id": "548b1b3d33822a17a23f4e62",
+                        "ownerId": self.misfit_user_id,
+                        "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+            process_goal(message, misfit, self.user.pk)
+        eq_(Goal.objects.filter(user_id=self.user.pk).count(), 1)
+
+        # Delete
+        message = { "type": "goals",
+                    "action": "deleted",
+                    "id": "548b1b3d33822a17a23f4e62",
+                    "ownerId": self.misfit_user_id,
+                    "updatedAt": "2014-10-17 12:00:00 UTC"
+                    }
+        process_goal(message, misfit, self.user.pk)
+        eq_(Goal.objects.filter(user_id=self.user.pk).count(), 0)
  
     def test_profile(self):
 
