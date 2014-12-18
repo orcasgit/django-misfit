@@ -38,7 +38,6 @@ if not settings.configured:
 
         # Make celery tasks run immediately
         CELERY_ALWAYS_EAGER = True,
-        BROKER_BACKEND = 'memory',
 
         LOGGING = {
             'version': 1,
