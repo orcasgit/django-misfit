@@ -156,6 +156,7 @@ class TestNotificationTask(MisfitTestBase):
             'UnsubscribeURL': 'https://xxxx'
         }
 
+    @override_settings(CELERY_ALWAYS_EAGER=True)
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_subscription_confirmation(self, verify_signature_mock):
         """
@@ -171,6 +172,7 @@ class TestNotificationTask(MisfitTestBase):
         self.assertEqual(Profile.objects.count(), 0)
         self.assertEqual(Summary.objects.count(), 0)
 
+    @override_settings(CELERY_ALWAYS_EAGER=True)
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_notification(self, verify_signature_mock):
         """
