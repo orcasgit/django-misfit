@@ -184,6 +184,7 @@ class TestNotificationTask(MisfitTestBase):
         verify_signature_mock.return_value = None
         content = json.dumps(self.notification_content).encode('utf8')
         with HTTMock(JsonMock().goal_http,
+                     JsonMock().profile_http,
                      JsonMock('summary_detail').summary_http):
             with patch('celery.app.task.Task.delay') as mock_delay:
                 mock_delay.side_effect = lambda arg: process_notification(arg)
