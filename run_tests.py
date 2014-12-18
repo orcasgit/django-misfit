@@ -27,6 +27,8 @@ if not settings.configured:
         SECRET_KEY='something-secret',
         ROOT_URLCONF='misfitapp.urls',
 
+        USE_TZ = True,
+
         TEMPLATE_DIRS=(
             os.path.join(PROJECT_PATH, 'misfitapp', 'templates'),
             os.path.join(PROJECT_PATH, 'misfitapp', 'tests', 'templates'),),
@@ -37,11 +39,14 @@ if not settings.configured:
         LOGGING = {
             'version': 1,
             'handlers': {
-                'null': {
+                'console': {
                     'level': 'DEBUG',
-                    'class': 'django.utils.log.NullHandler',
+                    'class': 'logging.StreamHandler'
                 },
-            }
+            },
+            'loggers': {
+                'misfitapp.tasks': {'handlers': ['console'], 'level': 'DEBUG'},
+            },
         },
 
         MIDDLEWARE_CLASSES = (

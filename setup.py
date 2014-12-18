@@ -11,6 +11,9 @@ setup(
     author_email="bpitcher@orcasinc.com",
     packages=find_packages(),
     install_requires=["setuptools"] + required,
+    dependency_links=[
+        'https://github.com/orcasgit/python-misfit/archive/master.zip#egg=misfit-0.0.1'
+    ],
     include_package_data=True,
     url="https://github.com/orcasgit/django-misfit/",
     license="License :: OSI Approved :: Apache Software License",

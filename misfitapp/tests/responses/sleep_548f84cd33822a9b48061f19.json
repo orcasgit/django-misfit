@@ -1,0 +1,12 @@
+{
+    "duration": 46380,
+    "sleepDetails":
+    [{"value": 2, "datetime": "2014-12-13T21:17:17-08:00"},
+     {"value": 1, "datetime": "2014-12-13T21:44:17-08:00"},
+     {"value": 2, "datetime": "2014-12-13T21:58:17-08:00"},
+     {"value": 1, "datetime": "2014-12-13T22:26:17-08:00"}],
+    "id": "548f84cd33822a9b48061f19",
+    "startTime": "2014-12-13T21:17:17-08:00",
+    "autoDetected": true
+}
+
