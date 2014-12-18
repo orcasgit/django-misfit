@@ -110,7 +110,7 @@ def process_device(message, misfit, uid):
         data = cc_to_underscore_keys(device.data)
         d, created = Device.objects.get_or_create(user_id=uid, defaults=data)
         if not created:
-            for attr, val in data.iteritems():
+            for attr, val in data.items():
                 setattr(d, attr, val)
             d.save()
         return device
@@ -128,7 +128,7 @@ def process_goal(message, misfit, uid):
         d, created = Goal.objects.get_or_create(pk=message['id'],
                                                 defaults=data)
         if not created:
-            for attr, val in data.iteritems():
+            for attr, val in data.items():
                 setattr(d, attr, val)
             d.save()
         return goal
@@ -145,7 +145,7 @@ def process_profile(message, misfit, uid):
         data.pop('user_id')
         p, created = Profile.objects.get_or_create(user_id=uid, defaults=data)
         if not created:
-            for attr, val in data.iteritems():
+            for attr, val in data.items():
                 setattr(p, attr, val)
             p.save()
         return profile
@@ -163,7 +163,7 @@ def process_session(message, misfit, uid):
         s, created = Session.objects.get_or_create(id=message['id'],
                                                    defaults=data)
         if not created:
-            for attr, val in data.iteritems():
+            for attr, val in data.items():
                 setattr(s, attr, val)
             s.save()
         return session
@@ -182,7 +182,7 @@ def process_sleep(message, misfit, uid):
         s, created = Sleep.objects.get_or_create(id=message['id'],
                                                  defaults=data)
         if not created:
-            for attr, val in data.iteritems():
+            for attr, val in data.items():
                 setattr(s, attr, val)
             s.save()
             # For simplicity, remove existing segments on updates,
@@ -215,6 +215,6 @@ def update_summaries(date_ranges):
                                                        date=data['date'],
                                                        defaults=data)
             if not created:
-                for attr, val in data.iteritems():
+                for attr, val in data.items():
                     setattr(s, attr, val)
                 s.save()
