@@ -8,6 +8,7 @@ import sys
 from django.core.cache import cache
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.core.urlresolvers import reverse
+from django.db import transaction
 from django.test.utils import override_settings
 from freezegun import freeze_time
 from httmock import HTTMock, urlmatch
@@ -156,6 +157,7 @@ class TestNotificationTask(MisfitTestBase):
             'UnsubscribeURL': 'https://xxxx'
         }
 
+    @transaction.commit_manually
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_subscription_confirmation(self, verify_signature_mock):
         """
@@ -166,11 +168,13 @@ class TestNotificationTask(MisfitTestBase):
         with HTTMock(sns_subscribe):
             self.client.post(reverse('misfit-notification'), data=content,
                              content_type='application/json')
+        transaction.commit()
         verify_signature_mock.assert_called_once_with()
         self.assertEqual(Goal.objects.count(), 0)
         self.assertEqual(Profile.objects.count(), 0)
         self.assertEqual(Summary.objects.count(), 0)
 
+    @transaction.commit_manually
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_notification(self, verify_signature_mock):
         """
@@ -182,6 +186,8 @@ class TestNotificationTask(MisfitTestBase):
                      JsonMock('summary_detail').summary_http):
             self.client.post(reverse('misfit-notification'), data=content,
                              content_type='application/json')
+        transaction.commit()
+        verify_signature_mock.assert_called_once_with()
         eq_(Goal.objects.filter(user=self.user).count(), 2)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 3)
