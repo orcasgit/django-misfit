@@ -39,13 +39,13 @@ if not settings.configured:
         LOGGING = {
             'version': 1,
             'handlers': {
-                'null': {
+                'console': {
                     'level': 'DEBUG',
-                    'class': 'django.utils.log.NullHandler',
+                    'class': 'logging.StreamHandler'
                 },
             },
             'loggers': {
-                'misfitapp.tasks': {'handlers': ['null'], 'level': 'DEBUG'},
+                'misfitapp.tasks': {'handlers': ['console'], 'level': 'DEBUG'},
             },
         },
 
