@@ -206,6 +206,7 @@ def update_summaries(date_ranges):
             mfuser = MisfitUser.objects.get(misfit_user_id=ownerId)
         except MisfitUser.DoesNotExist:
             logger.warning('Count not find Misfit user %s' % ownderId)
+            continue
 
         misfit = utils.create_misfit(access_token=mfuser.access_token)
         summaries = misfit.summary(detail=True, **date_range)
