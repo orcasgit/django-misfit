@@ -5,6 +5,8 @@ import celery
 import json
 import sys
 
+from celery import Celery
+from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.core.urlresolvers import reverse
@@ -156,7 +158,6 @@ class TestNotificationTask(MisfitTestBase):
             'UnsubscribeURL': 'https://xxxx'
         }
 
-    @override_settings(CELERY_ALWAYS_EAGER=True)
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_subscription_confirmation(self, verify_signature_mock):
         """
@@ -165,14 +166,16 @@ class TestNotificationTask(MisfitTestBase):
         verify_signature_mock.return_value = None
         content = json.dumps(self.subscription_content).encode('utf8')
         with HTTMock(sns_subscribe):
-            self.client.post(reverse('misfit-notification'), data=content,
-                             content_type='application/json')
+            with patch('celery.app.task.Task.delay') as mock_delay:
+                mock_delay.side_effect = lambda arg: process_notification(arg)
+                self.client.post(reverse('misfit-notification'), data=content,
+                                 content_type='application/json')
+                mock_delay.assert_called_once_with(content)
         verify_signature_mock.assert_called_once_with()
         self.assertEqual(Goal.objects.count(), 0)
         self.assertEqual(Profile.objects.count(), 0)
         self.assertEqual(Summary.objects.count(), 0)
 
-    @override_settings(CELERY_ALWAYS_EAGER=True)
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_notification(self, verify_signature_mock):
         """
@@ -182,8 +185,11 @@ class TestNotificationTask(MisfitTestBase):
         content = json.dumps(self.notification_content).encode('utf8')
         with HTTMock(JsonMock().goal_http,
                      JsonMock('summary_detail').summary_http):
-            self.client.post(reverse('misfit-notification'), data=content,
-                             content_type='application/json')
+            with patch('celery.app.task.Task.delay') as mock_delay:
+                mock_delay.side_effect = lambda arg: process_notification(arg)
+                self.client.post(reverse('misfit-notification'), data=content,
+                                 content_type='application/json')
+                mock_delay.assert_called_once_with(content)
         eq_(Goal.objects.filter(user=self.user).count(), 2)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 3)

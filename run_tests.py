@@ -36,9 +36,6 @@ if not settings.configured:
         MISFIT_CLIENT_ID='FAKE_ID',
         MISFIT_CLIENT_SECRET='FAKE_SECRET',
 
-        # Make celery tasks run immediately
-        CELERY_ALWAYS_EAGER = True,
-
         LOGGING = {
             'version': 1,
             'handlers': {
