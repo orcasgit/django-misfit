@@ -16,7 +16,7 @@ from misfit.notification import MisfitNotification
 
 from . import utils
 from .models import MisfitUser
-from .tasks import process_notification
+from .tasks import process_notification, import_historical
 
 
 @login_required
@@ -87,6 +87,9 @@ def complete(request):
         misfit_user = MisfitUser.objects.create(**user_updates)
     # Add the Misfit user info to the session
     request.session['misfit_profile'] = profile.data
+
+    # Import their data TODO: Fix failing tests, when below line is uncommented
+    # import_historical.delay(misfit_user)
 
     next_url = request.session.pop('misfit_next', None) or utils.get_setting(
         'MISFIT_LOGIN_REDIRECT')

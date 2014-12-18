@@ -1,12 +1,12 @@
 import arrow
 import logging
-import re
 import sys
 
 from celery import shared_task
 from celery.exceptions import Reject
 from cryptography.exceptions import InvalidSignature
 from django.core.cache import cache
+from datetime import timedelta, date
 from misfit.exceptions import MisfitRateLimitError
 from misfit.notification import MisfitNotification
 
@@ -21,19 +21,22 @@ from .models import (
     Summary,
     Goal
 )
+from .extras import cc_to_underscore_keys
 
 logger = logging.getLogger(__name__)
 
 
-def cc_to_underscore(name):
-    """ Convert camelCase name to under_score """
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+@shared_task
+def import_historical(misfit_user):
+    """
+    Import a user's historical data from Misfit starting at start_date.
+    If there is existing data, it is not overwritten.
+    """
 
+    misfit = utils.create_misfit(access_token=misfit_user.access_token)
+    for cls in (Profile, Device, Summary, Goal, Session, Sleep):
+        cls.create_from_misfit(misfit, misfit_user.user_id)
 
-def cc_to_underscore_keys(dictionary):
-    """ Convert dictionary keys from camelCase to under_score """
-    return dict((cc_to_underscore(key), val) for key, val in dictionary.items())
 
 
 @shared_task
