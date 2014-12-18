@@ -14,7 +14,7 @@ if not settings.configured:
         DATABASES={
             'default': {
                 'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': 'django_misfit',
+                'NAME': 'django_misfit%s' % os.environ.get('TOX_ENV', ''),
             }
         },
         INSTALLED_APPS=[
