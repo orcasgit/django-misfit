@@ -109,7 +109,7 @@ class Sleep(models.Model):
     duration = models.IntegerField()
 
     def __str__(self):
-        '%s %s' % (start_time, duration)
+        return '%s %s' % (self.start_time, self.duration)
 
 
 @python_2_unicode_compatible
@@ -124,4 +124,4 @@ class SleepSegment(models.Model):
     sleep_type = models.SmallIntegerField(choices=SLEEP_TYPES)
 
     def __str__(self):
-        '%s %s' % (time, sleep_type)
+        return '%s %s' % (self.time, self.sleep_type)

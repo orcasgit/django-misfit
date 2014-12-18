@@ -101,6 +101,8 @@ class TestMisfitModels(MisfitTestBase):
         }
         sleep = Sleep(**data)
         sleep.save()
+        self.assertEqual(
+            '%s' % sleep, '%s %s' % (sleep.start_time, sleep.duration))
 
         seg_data = {'sleep': sleep,
                     'time': data['start_time'],
@@ -108,3 +110,4 @@ class TestMisfitModels(MisfitTestBase):
         }
         seg = SleepSegment(**seg_data)
         seg.save()
+        self.assertEqual('%s' % seg, '%s %s' % (seg.time, seg.sleep_type))
