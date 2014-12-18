@@ -3,3 +3,4 @@
 dist
 django_misfit.egg-info
 .coverage
+env
