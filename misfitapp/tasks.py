@@ -77,13 +77,16 @@ def process_notification(content):
 
                 if goal:
                     # Adjust date range for later summary retrieval
+                    # For whatever reason, the end_date is not inclusive, so
+                    # we add a day
+                    next_day = goal.date + arrow.util.timedelta(days=1)
                     if ownerId not in date_ranges:
                         date_ranges[ownerId] = {'start_date': goal.date,
-                                                'end_date': goal.date}
+                                                'end_date': next_day}
                     elif goal.date < date_ranges[ownerId]['start_date']:
                         date_ranges[ownerId]['start_date'] = goal.date
                     elif goal.date > date_ranges[ownerId]['end_date']:
-                        date_ranges[ownerId]['end_date'] = goal.date
+                        date_ranges[ownerId]['end_date'] = next_day
 
         update_summaries(date_ranges)
 
