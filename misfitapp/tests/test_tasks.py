@@ -36,6 +36,7 @@ from misfitapp.tasks import (
     process_profile,
     process_session,
     process_sleep,
+    import_historical,
     )
 
 try:
@@ -97,7 +98,7 @@ class JsonMock:
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
               path='/move/resource/v1/user/me/activity/sleeps/.*')
     def sleep_http(self, url, *args):
-        """ Method to return the contents of a goal json file """
+        """ Method to return the contents of a sleep json file """
         self.file_name_base = 'sleep_' + url.path.split('/')[-2]
         return self.json_file()
 
@@ -111,6 +112,25 @@ class JsonMock:
     def json_http(self, *args):
         """ Generic method to return the contents of a json file """
         return self.json_file()
+
+
+class TestImportHistoricalTask(MisfitTestBase):
+
+    def setUp(self):
+        super(TestImportHistoricalTask, self).setUp()
+
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    def test_import_historical(self, verify_signature_mock):
+        with HTTMock(JsonMock().profile_http,
+                     JsonMock().device_http,
+                     JsonMock('summary_summaries').summary_http,
+                     JsonMock().goal_http,
+                     JsonMock().session_http,
+                     JsonMock().sleep_http,
+        ):
+            import_historical(self.misfit_user)
+        eq_(Profile.objects.filter(user=self.user).count(), 1)
+        eq_(Device.objects.filter(user=self.user).count(), 1)
 
 
 class TestNotificationTask(MisfitTestBase):
