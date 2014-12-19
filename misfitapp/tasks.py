@@ -22,7 +22,7 @@ from .models import (
     Summary,
     Goal
 )
-from .extras import cc_to_underscore_keys
+from .extras import cc_to_underscore_keys, chunkify_dates
 
 logger = logging.getLogger(__name__)
 
@@ -231,13 +231,15 @@ def update_summaries(date_ranges):
             continue
 
         misfit = utils.create_misfit(access_token=mfuser.access_token)
-        summaries = misfit.summary(detail=True, **date_range)
-        for summary in summaries:
-            data = cc_to_underscore_keys(summary.data)
-            s, created = Summary.objects.get_or_create(user_id=mfuser.user_id,
-                                                       date=data['date'],
-                                                       defaults=data)
-            if not created:
-                for attr, val in data.items():
-                    setattr(s, attr, val)
-                s.save()
+
+        for start, end in chunkify_dates(date_range['start_date'], date_range['end_date']):
+            summaries = misfit.summary(detail=True, start_date=start, end_date=end)
+            for summary in summaries:
+                data = cc_to_underscore_keys(summary.data)
+                s, created = Summary.objects.get_or_create(user_id=mfuser.user_id,
+                                                           date=data['date'],
+                                                           defaults=data)
+                if not created:
+                    for attr, val in data.items():
+                        setattr(s, attr, val)
+                    s.save()
