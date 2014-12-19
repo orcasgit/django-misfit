@@ -89,7 +89,7 @@ def complete(request):
     request.session['misfit_profile'] = profile.data
 
     # Import their data TODO: Fix failing tests, when below line is uncommented
-    # import_historical.delay(misfit_user)
+    import_historical.delay(misfit_user)
 
     next_url = request.session.pop('misfit_next', None) or utils.get_setting(
         'MISFIT_LOGIN_REDIRECT')
