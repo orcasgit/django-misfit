@@ -1,6 +1,7 @@
 import arrow
 import logging
 import sys
+import random
 
 from celery import shared_task
 from celery.exceptions import Reject
@@ -30,13 +31,31 @@ logger = logging.getLogger(__name__)
 def import_historical(misfit_user):
     """
     Import a user's historical data from Misfit starting at start_date.
-    If there is existing data, it is not overwritten.
+    Spin off a new task for each data type. If there is existing data,
+    it is not overwritten.
     """
-
-    misfit = utils.create_misfit(access_token=misfit_user.access_token)
     for cls in (Profile, Device, Summary, Goal, Session, Sleep):
-        cls.create_from_misfit(misfit, misfit_user.user_id)
+        import_historical_cls.delay(cls, misfit_user)
 
+
+@shared_task
+def import_historical_cls(cls, misfit_user):
+    try:
+        misfit = utils.create_misfit(access_token=misfit_user.access_token)
+        cls.create_from_misfit(misfit, misfit_user.user_id)
+    except MisfitRateLimitError:
+        # We have hit the rate limit for the user, retry when it's reset,
+        # according to the header in the reply from the failing API call
+        headers = sys.exc_info()[1].response.headers
+        reset = arrow.get(headers['x-ratelimit-reset'])
+        retry_after_secs = (reset - arrow.now()).seconds + random.randrange(0, 5)
+        logger.debug('Rate limit reached, will try again in %i seconds' %
+                     retry_after_secs)
+        raise process_notification.retry(e, countdown=retry_after_secs)
+    except Exception:
+        exc = sys.exc_info()[1]
+        logger.exception("Unknown exception processing notification: %s" % exc)
+        raise Reject(exc, requeue=False)
 
 
 @shared_task

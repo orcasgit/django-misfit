@@ -37,6 +37,7 @@ from misfitapp.tasks import (
     process_session,
     process_sleep,
     import_historical,
+    import_historical_cls,
     )
 
 try:
@@ -121,6 +122,8 @@ class TestImportHistoricalTask(MisfitTestBase):
 
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_import_historical(self, verify_signature_mock):
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
+        eq_(Device.objects.filter(user=self.user).count(), 0)
         with HTTMock(JsonMock().profile_http,
                      JsonMock().device_http,
                      JsonMock('summary_summaries').summary_http,
@@ -128,7 +131,10 @@ class TestImportHistoricalTask(MisfitTestBase):
                      JsonMock().session_http,
                      JsonMock().sleep_http,
         ):
-            import_historical(self.misfit_user)
+            with patch('celery.app.task.Task.delay') as mock_delay:
+                mock_delay.side_effect = lambda arg1, arg2: import_historical_cls(arg1, arg2)
+                import_historical(self.misfit_user)
+
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Device.objects.filter(user=self.user).count(), 1)
 
