@@ -36,6 +36,8 @@ from misfitapp.tasks import (
     process_profile,
     process_session,
     process_sleep,
+    import_historical,
+    import_historical_cls,
     )
 
 try:
@@ -97,7 +99,7 @@ class JsonMock:
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
               path='/move/resource/v1/user/me/activity/sleeps/.*')
     def sleep_http(self, url, *args):
-        """ Method to return the contents of a goal json file """
+        """ Method to return the contents of a sleep json file """
         self.file_name_base = 'sleep_' + url.path.split('/')[-2]
         return self.json_file()
 
@@ -111,6 +113,30 @@ class JsonMock:
     def json_http(self, *args):
         """ Generic method to return the contents of a json file """
         return self.json_file()
+
+
+class TestImportHistoricalTask(MisfitTestBase):
+
+    def setUp(self):
+        super(TestImportHistoricalTask, self).setUp()
+
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    def test_import_historical(self, verify_signature_mock):
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
+        eq_(Device.objects.filter(user=self.user).count(), 0)
+        with HTTMock(JsonMock().profile_http,
+                     JsonMock().device_http,
+                     JsonMock('summary_summaries').summary_http,
+                     JsonMock().goal_http,
+                     JsonMock().session_http,
+                     JsonMock().sleep_http,
+        ):
+            with patch('celery.app.task.Task.delay') as mock_delay:
+                mock_delay.side_effect = lambda arg1, arg2: import_historical_cls(arg1, arg2)
+                import_historical(self.misfit_user)
+
+        eq_(Profile.objects.filter(user=self.user).count(), 1)
+        eq_(Device.objects.filter(user=self.user).count(), 1)
 
 
 class TestNotificationTask(MisfitTestBase):

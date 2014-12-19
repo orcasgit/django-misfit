@@ -1,12 +1,13 @@
 import arrow
 import logging
-import re
 import sys
+import random
 
 from celery import shared_task
 from celery.exceptions import Reject
 from cryptography.exceptions import InvalidSignature
 from django.core.cache import cache
+from datetime import timedelta, date
 from misfit.exceptions import MisfitRateLimitError
 from misfit.notification import MisfitNotification
 
@@ -21,19 +22,40 @@ from .models import (
     Summary,
     Goal
 )
+from .extras import cc_to_underscore_keys, chunkify_dates
 
 logger = logging.getLogger(__name__)
 
 
-def cc_to_underscore(name):
-    """ Convert camelCase name to under_score """
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+@shared_task
+def import_historical(misfit_user):
+    """
+    Import a user's historical data from Misfit starting at start_date.
+    Spin off a new task for each data type. If there is existing data,
+    it is not overwritten.
+    """
+    for cls in (Profile, Device, Summary, Goal, Session, Sleep):
+        import_historical_cls.delay(cls, misfit_user)
 
 
-def cc_to_underscore_keys(dictionary):
-    """ Convert dictionary keys from camelCase to under_score """
-    return dict((cc_to_underscore(key), val) for key, val in dictionary.items())
+@shared_task
+def import_historical_cls(cls, misfit_user):
+    try:
+        misfit = utils.create_misfit(access_token=misfit_user.access_token)
+        cls.create_from_misfit(misfit, misfit_user.user_id)
+    except MisfitRateLimitError:
+        # We have hit the rate limit for the user, retry when it's reset,
+        # according to the header in the reply from the failing API call
+        headers = sys.exc_info()[1].response.headers
+        reset = arrow.get(headers['x-ratelimit-reset'])
+        retry_after_secs = (reset - arrow.now()).seconds + random.randrange(0, 5)
+        logger.debug('Rate limit reached, will try again in %i seconds' %
+                     retry_after_secs)
+        raise process_notification.retry(e, countdown=retry_after_secs)
+    except Exception:
+        exc = sys.exc_info()[1]
+        logger.exception("Unknown exception processing notification: %s" % exc)
+        raise Reject(exc, requeue=False)
 
 
 @shared_task
@@ -212,13 +234,15 @@ def update_summaries(date_ranges):
             continue
 
         misfit = utils.create_misfit(access_token=mfuser.access_token)
-        summaries = misfit.summary(detail=True, **date_range)
-        for summary in summaries:
-            data = cc_to_underscore_keys(summary.data)
-            s, created = Summary.objects.get_or_create(user_id=mfuser.user_id,
-                                                       date=data['date'],
-                                                       defaults=data)
-            if not created:
-                for attr, val in data.items():
-                    setattr(s, attr, val)
-                s.save()
+
+        for start, end in chunkify_dates(date_range['start_date'], date_range['end_date']):
+            summaries = misfit.summary(detail=True, start_date=start, end_date=end)
+            for summary in summaries:
+                data = cc_to_underscore_keys(summary.data)
+                s, created = Summary.objects.get_or_create(user_id=mfuser.user_id,
+                                                           date=data['date'],
+                                                           defaults=data)
+                if not created:
+                    for attr, val in data.items():
+                        setattr(s, attr, val)
+                    s.save()

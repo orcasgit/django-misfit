@@ -2,6 +2,9 @@ from django.conf import settings
 from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
 from math import pow
+import datetime
+
+from .extras import cc_to_underscore_keys, chunkify_dates
 
 MAX_KEY_LEN = 24
 UserModel = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
@@ -37,6 +40,27 @@ class Summary(models.Model):
     class Meta:
         unique_together = ('user', 'date')
 
+    @classmethod
+    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
+        """
+        Imports all Summary data from misfit for the specified date range, chunking API
+        calls if needed.
+        """
+        # Keep track of the data we already have
+        exists = cls.objects.filter(user_id=uid,
+                                    date__gte=start_date,
+                                    date__lte=end_date).values_list('date', flat=True)
+        obj_list = []
+        date_chunks = chunkify_dates(start_date, end_date, 30)
+        for start, end in date_chunks:
+            summaries = misfit.summary(start_date=start, end_date=end, detail=True)
+            for summary in summaries:
+                if summary.date.date() not in exists:
+                    data = cc_to_underscore_keys(summary.data)
+                    data['user_id'] = uid
+                    obj_list.append(cls(**data))
+        cls.objects.bulk_create(obj_list)
+
 
 @python_2_unicode_compatible
 class Profile(models.Model):
@@ -50,6 +74,14 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.email
+
+    @classmethod
+    def create_from_misfit(cls, misfit, uid):
+        if not cls.objects.filter(user_id=uid).exists():
+            profile = misfit.profile()
+            data = cc_to_underscore_keys(profile.data)
+            data['user_id'] = uid
+            cls(**data).save()
 
 
 @python_2_unicode_compatible
@@ -66,6 +98,14 @@ class Device(models.Model):
     def __str__(self):
         return '%s: %s' % (self.device_type, self.serial_number)
 
+    @classmethod
+    def create_from_misfit(cls, misfit, uid):
+        if not cls.objects.filter(user_id=uid).exists():
+            device = misfit.device()
+            data = cc_to_underscore_keys(device.data)
+            data['user_id'] = uid
+            cls(**data).save()
+
 
 @python_2_unicode_compatible
 class Goal(models.Model):
@@ -79,6 +119,30 @@ class Goal(models.Model):
     def __str__(self):
         return '%s %s %s of %s' % (self.id, self.date, self.points,
                                    self.target_points)
+
+    class Meta:
+        unique_together = ('user', 'date')
+
+    @classmethod
+    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
+        """
+        Imports all Goal data from misfit for the specified date range, chunking API
+        calls if needed.
+        """
+        # Keep track of the data we already have
+        exists = cls.objects.filter(user_id=uid,
+                                    date__gte=start_date,
+                                    date__lte=end_date).values_list('date', flat=True)
+        obj_list = []
+        date_chunks = chunkify_dates(start_date, end_date, 30)
+        for start, end in date_chunks:
+            goals = misfit.goal(start_date=start, end_date=end)
+            for goal in goals:
+                if goal.date.date() not in exists:
+                    data = cc_to_underscore_keys(goal.data)
+                    data['user_id'] = uid
+                    obj_list.append(cls(**data))
+        cls.objects.bulk_create(obj_list)
 
 
 @python_2_unicode_compatible
@@ -103,6 +167,29 @@ class Session(models.Model):
     def __str__(self):
         return '%s %s %s' % (self.start_time, self.duration,
                              self.activity_type)
+    class Meta:
+        unique_together = ('user', 'start_time')
+
+    @classmethod
+    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
+        """
+        Imports all Session data from misfit for the specified date range, chunking API
+        calls if needed.
+        """
+        # Keep track of the data we already have
+        exists = cls.objects.filter(user_id=uid,
+                                    start_time__gte=start_date,
+                                    start_time__lte=end_date).values_list('start_time', flat=True)
+        obj_list = []
+        date_chunks = chunkify_dates(start_date, end_date, 30)
+        for start, end in date_chunks:
+            sessions = misfit.session(start_date=start, end_date=end)
+            for session in sessions:
+                if session.startTime not in exists:
+                    data = cc_to_underscore_keys(session.data)
+                    data['user_id'] = uid
+                    obj_list.append(cls(**data))
+        cls.objects.bulk_create(obj_list)
 
 
 @python_2_unicode_compatible
@@ -115,6 +202,38 @@ class Sleep(models.Model):
 
     def __str__(self):
         return '%s %s' % (self.start_time, self.duration)
+
+    class Meta:
+        unique_together = ('user', 'start_time')
+
+    @classmethod
+    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
+        """
+        Imports all Sleep and Sleep Segment data from misfit for the specified date range,
+        chunking API calls if needed.
+        """
+        # Keep track of the data we already have
+        exists = cls.objects.filter(user_id=uid,
+                                    start_time__gte=start_date,
+                                    start_time__lte=end_date).values_list('start_time', flat=True)
+        seg_list = []
+        date_chunks = chunkify_dates(start_date, end_date, 30)
+        for start, end in date_chunks:
+            sleeps = misfit.sleep(start_date=start, end_date=end)
+            for sleep in sleeps:
+                if sleep.startTime not in exists:
+                    data = cc_to_underscore_keys(sleep.data)
+                    data['user_id'] = uid
+                    segments = data.pop('sleep_details')
+                    s = cls(**data)
+                    s.save()
+                    for seg in segments:
+                        seg_list.append(SleepSegment(sleep=s,
+                                                     time=seg['datetime'],
+                                                     sleep_type=seg['value']))
+
+
+        SleepSegment.objects.bulk_create(seg_list)
 
 
 @python_2_unicode_compatible

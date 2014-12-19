@@ -165,7 +165,8 @@ class TestCompleteView(MisfitTestBase):
         Complete view should fetch & store the user's access token and add
         the user's profile to the session
         """
-        response = self._get()
+        with patch('celery.app.task.Task.delay') as mock_delay:
+            response = self._get()
         self.assertRedirectsNoFollow(
             response, utils.get_setting('MISFIT_LOGIN_REDIRECT'))
         misfit_user = MisfitUser.objects.get()
@@ -187,7 +188,8 @@ class TestCompleteView(MisfitTestBase):
         Complete view should redirect to session['misfit_next'] if available.
         """
         self._set_session_vars(misfit_next='/test')
-        response = self._get()
+        with patch('celery.app.task.Task.delay') as mock_delay:
+            response = self._get()
         self.assertRedirectsNoFollow(response, '/test')
         misfit_user = MisfitUser.objects.get()
         self.assertEqual(misfit_user.user, self.user)
@@ -214,7 +216,8 @@ class TestCompleteView(MisfitTestBase):
         Complete view should overwrite existing credentials for this user.
         """
         self.misfit_user = self.create_misfit_user(user=self.user)
-        response = self._get()
+        with patch('celery.app.task.Task.delay') as mock_delay:
+            response = self._get()
         misfit_user = MisfitUser.objects.get()
         self.assertEqual(misfit_user.user, self.user)
         self.assertEqual(misfit_user.access_token, self.access_token)
