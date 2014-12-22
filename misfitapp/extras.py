@@ -18,7 +18,8 @@ def cc_to_underscore_keys(dictionary):
 def chunkify_dates(start, end, days_in_chunk=DAYS_IN_CHUNK):
     """
     Return a list of tuples that chunks the date range into ranges
-    of length days_in_chunk.
+    of length days_in_chunk, exclusive of the end date. So the end
+    date of one chunk is equal to the start date of the chunk after.
     """
     chunks = []
     s = start
@@ -26,6 +27,16 @@ def chunkify_dates(start, end, days_in_chunk=DAYS_IN_CHUNK):
     while e - datetime.timedelta(days=days_in_chunk) < end:
         e = min(e, end)
         chunks.append((s, e))
-        s = e + datetime.timedelta(days=1)
+        s = e
         e = s + datetime.timedelta(days=days_in_chunk)
     return chunks
+
+
+def dedupe_by_field(l, field):
+    """
+    Returns a new list with duplicate objects removed. Objects are equal
+    iff the have the same value for 'field'.
+    """
+    d = {getattr(obj, field): obj for obj in l}
+    return list(d.values())
+

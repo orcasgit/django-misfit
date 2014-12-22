@@ -1,10 +1,13 @@
 from django.conf import settings
-from django.db import models
+from django.db import models, IntegrityError
 from django.utils.encoding import python_2_unicode_compatible
 from math import pow
 import datetime
 
-from .extras import cc_to_underscore_keys, chunkify_dates
+from .extras import (
+    cc_to_underscore_keys,
+    chunkify_dates,
+    dedupe_by_field)
 
 MAX_KEY_LEN = 24
 UserModel = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
@@ -59,7 +62,7 @@ class Summary(models.Model):
                     data = cc_to_underscore_keys(summary.data)
                     data['user_id'] = uid
                     obj_list.append(cls(**data))
-        cls.objects.bulk_create(obj_list)
+        cls.objects.bulk_create(dedupe_by_field(obj_list, 'date'))
 
 
 @python_2_unicode_compatible
@@ -142,7 +145,7 @@ class Goal(models.Model):
                     data = cc_to_underscore_keys(goal.data)
                     data['user_id'] = uid
                     obj_list.append(cls(**data))
-        cls.objects.bulk_create(obj_list)
+        cls.objects.bulk_create(dedupe_by_field(obj_list, 'date'))
 
 
 @python_2_unicode_compatible
@@ -189,7 +192,7 @@ class Session(models.Model):
                     data = cc_to_underscore_keys(session.data)
                     data['user_id'] = uid
                     obj_list.append(cls(**data))
-        cls.objects.bulk_create(obj_list)
+        cls.objects.bulk_create(dedupe_by_field(obj_list, 'start_time'))
 
 
 @python_2_unicode_compatible
@@ -226,13 +229,16 @@ class Sleep(models.Model):
                     data['user_id'] = uid
                     segments = data.pop('sleep_details')
                     s = cls(**data)
-                    s.save()
-                    for seg in segments:
-                        seg_list.append(SleepSegment(sleep=s,
-                                                     time=seg['datetime'],
-                                                     sleep_type=seg['value']))
-
-
+                    try:
+                        s.save()
+                        for seg in segments:
+                            seg_list.append(SleepSegment(sleep=s,
+                                                         time=seg['datetime'],
+                                                         sleep_type=seg['value']))
+                    except IntegrityError:
+                        # Could happen if Misfit gives us overlapping
+                        # data due to the date range bug in their API.
+                        pass
         SleepSegment.objects.bulk_create(seg_list)
 
 
