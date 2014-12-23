@@ -10,7 +10,7 @@ setup(
     author="orcas",
     author_email="bpitcher@orcasinc.com",
     packages=find_packages(),
-    install_requires=["setuptools"] + required,
+    install_requires=["setuptools<8.0"] + required,
     include_package_data=True,
     url="https://github.com/orcasgit/django-misfit/",
     license="License :: OSI Approved :: Apache Software License",
