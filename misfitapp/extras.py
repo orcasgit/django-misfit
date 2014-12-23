@@ -37,6 +37,5 @@ def dedupe_by_field(l, field):
     Returns a new list with duplicate objects removed. Objects are equal
     iff the have the same value for 'field'.
     """
-    d = {getattr(obj, field): obj for obj in l}
+    d = dict((getattr(obj, field), obj) for obj in l)
     return list(d.values())
-
