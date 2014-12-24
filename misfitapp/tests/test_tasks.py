@@ -202,70 +202,73 @@ class TestNotificationTask(MisfitTestBase):
         self.assertEqual(Profile.objects.count(), 0)
         self.assertEqual(Summary.objects.count(), 0)
 
-    @freeze_time("2014-07-02 10:52:00", tz_offset=0)
-    @patch('logging.Logger.debug')
     @patch('misfit.notification.MisfitNotification.verify_signature')
-    def test_notification(self, verify_signature_mock, debug_mock):
+    @patch('celery.app.task.Task.delay')
+    def test_notification(self, mock_delay, verify_signature_mock):
         """
         Check that a task gets created to handle notification
         """
-        notify_url = reverse('misfit-notification')
+        mock_delay.side_effect = lambda arg: process_notification(arg)
         verify_signature_mock.return_value = None
-        content = json.dumps(self.notification_content).encode('utf8')
         with HTTMock(JsonMock().goal_http,
                      JsonMock().profile_http,
                      JsonMock('summary_detail').summary_http):
-            with patch('celery.app.task.Task.delay') as mock_delay:
-                mock_delay.side_effect = lambda arg: process_notification(arg)
-                self.client.post(notify_url, data=content,
-                                 content_type='application/json')
-                mock_delay.assert_called_once_with(content)
+            content = json.dumps(self.notification_content).encode('utf8')
+            self.client.post(reverse('misfit-notification'), data=content,
+                             content_type='application/json')
+        mock_delay.assert_called_once_with(content)
         eq_(Goal.objects.filter(user=self.user).count(), 2)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 3)
 
+    @freeze_time("2014-07-02 10:52:00", tz_offset=0)
+    @patch('logging.Logger.debug')
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('celery.app.task.Task.delay')
+    @patch('misfit.Misfit.goal')
+    @patch('celery.app.task.Task.retry')
+    def test_notification_rate_limit(self, mock_retry, mock_goal, mock_delay,
+                                     verify_signature_mock, debug_mock):
+        """ Test that the notification task rate limit errors ok """
         # Check that we fail gracefully when we hit the rate limit
-        Goal.objects.all().delete()
-        Profile.objects.all().delete()
-        Summary.objects.all().delete()
+        mock_delay.side_effect = lambda arg: process_notification(arg)
+        resp = MagicMock()
+        resp.headers = {'x-ratelimit-reset': 1404298869}
+        exc = misfit_exceptions.MisfitRateLimitError(429, '', resp)
+        mock_goal.side_effect = exc
+        mock_retry.side_effect = BaseException
         with HTTMock(JsonMock().profile_http):
-            with patch('celery.app.task.Task.delay') as mock_delay:
-                mock_delay.side_effect = lambda arg: process_notification(arg)
-                with patch('misfit.Misfit.goal') as mock_goal:
-                    resp = MagicMock()
-                    resp.headers = {'x-ratelimit-reset': 1404298869}
-                    mock_goal.side_effect = \
-                        misfit_exceptions.MisfitRateLimitError(429, '', resp)
-                    with patch('celery.app.task.Task.retry') as mock_retry:
-                        mock_retry.side_effect = BaseException
-                        try:
-                            self.client.post(notify_url, data=content,
-                                             content_type='application/json')
-                            assert False, 'We should have raised an exception'
-                        except BaseException:
-                            assert True
-                        mock_delay.assert_called_once_with(content)
-                        mock_goal.assert_called_once_with(
-                            object_id='51a4189acf12e53f81000001')
-                        mock_retry.assert_called_once_with(countdown=549)
+            try:
+                content = json.dumps(self.notification_content).encode('utf8')
+                self.client.post(reverse('misfit-notification'), data=content,
+                                 content_type='application/json')
+                assert False, 'We should have raised an exception'
+            except BaseException:
+                assert True
+        mock_delay.assert_called_once_with(content)
+        mock_goal.assert_called_once_with(object_id='51a4189acf12e53f81000001')
+        mock_retry.assert_called_once_with(countdown=549)
         eq_(Goal.objects.filter(user=self.user).count(), 0)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 0)
 
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('celery.app.task.Task.delay')
+    @patch('logging.Logger.warning')
+    def test_notification_no_user(self, mock_warning, mock_delay, mock_sig):
+        """ Test that the notification task handles missing users """
         # Check that we fail gracefully when the user doesn't exist on our end
-        Profile.objects.all().delete()
+        mock_delay.side_effect = lambda arg: process_notification(arg)
         MisfitUser.objects.all().delete()
         with HTTMock(JsonMock().goal_http, JsonMock().profile_http,
                      JsonMock('summary_detail').summary_http):
-            with patch('celery.app.task.Task.delay') as mock_delay:
-                mock_delay.side_effect = lambda arg: process_notification(arg)
-                with patch('logging.Logger.warning') as mock_warning:
-                    self.client.post(notify_url, data=content,
-                                     content_type='application/json')
-                    mock_delay.assert_called_once_with(content)
-                    mock_warning.assert_has_calls([call(
-                        'Received a notification for a user who is not in our '
-                        'database with id: %s' % self.misfit_user_id)] * 3)
+            content = json.dumps(self.notification_content).encode('utf8')
+            self.client.post(reverse('misfit-notification'), data=content,
+                             content_type='application/json')
+        mock_delay.assert_called_once_with(content)
+        mock_warning.assert_has_calls([call(
+            'Received a notification for a user who is not in our database '
+            'with id: %s' % self.misfit_user_id)] * 3)
         eq_(Goal.objects.filter(user=self.user).count(), 0)
         eq_(Profile.objects.filter(user=self.user).count(), 0)
         eq_(Summary.objects.filter(user=self.user).count(), 0)
