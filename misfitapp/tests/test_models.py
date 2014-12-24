@@ -55,6 +55,8 @@ class TestMisfitModels(MisfitTestBase):
         }
         p = Profile(**data)
         p.save()
+        self.assertEqual(p.email, data['email'])
+        self.assertEqual('%s' % p, p.email)
 
     def test_device(self):
         """ Test the Device Model """
@@ -67,6 +69,8 @@ class TestMisfitModels(MisfitTestBase):
         }
         d = Device(**data)
         d.save()
+        self.assertEqual(d.serial_number, data['serial_number'])
+        self.assertEqual('%s' % d, 'shine: %s' % data['serial_number'])
 
     def test_goal(self):
         """ Test the Goal Model """
@@ -78,6 +82,7 @@ class TestMisfitModels(MisfitTestBase):
         }
         g = Goal(**data)
         g.save()
+        self.assertEqual('%s' % g, '%s 2014-12-12 64.2 of 200' % data['id'])
 
     def test_session(self):
         """ Test the Session Model """
@@ -90,6 +95,7 @@ class TestMisfitModels(MisfitTestBase):
         }
         s = Session(**data)
         s.save()
+        self.assertEqual('%s' % s, '2014-12-12 22:00:01 300 soccer')
 
     def test_sleep(self):
         """ Test the Sleep and Sleep Segment model """

@@ -202,8 +202,10 @@ class TestNotificationTask(MisfitTestBase):
         self.assertEqual(Profile.objects.count(), 0)
         self.assertEqual(Summary.objects.count(), 0)
 
+    @freeze_time("2014-07-02 10:52:00", tz_offset=0)
+    @patch('logging.Logger.debug')
     @patch('misfit.notification.MisfitNotification.verify_signature')
-    def test_notification(self, verify_signature_mock):
+    def test_notification(self, verify_signature_mock, debug_mock):
         """
         Check that a task gets created to handle notification
         """
@@ -222,10 +224,36 @@ class TestNotificationTask(MisfitTestBase):
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 3)
 
-        # Check that we fail gracefully when the user doesn't exist on our end
+        # Check that we fail gracefully when we hit the rate limit
         Goal.objects.all().delete()
         Profile.objects.all().delete()
         Summary.objects.all().delete()
+        with HTTMock(JsonMock().profile_http):
+            with patch('celery.app.task.Task.delay') as mock_delay:
+                mock_delay.side_effect = lambda arg: process_notification(arg)
+                with patch('misfit.Misfit.goal') as mock_goal:
+                    resp = MagicMock()
+                    resp.headers = {'x-ratelimit-reset': 1404298869}
+                    mock_goal.side_effect = \
+                        misfit_exceptions.MisfitRateLimitError(429, '', resp)
+                    with patch('celery.app.task.Task.retry') as mock_retry:
+                        mock_retry.side_effect = BaseException
+                        try:
+                            self.client.post(notify_url, data=content,
+                                             content_type='application/json')
+                            assert False, 'We should have raised an exception'
+                        except BaseException:
+                            assert True
+                        mock_delay.assert_called_once_with(content)
+                        mock_goal.assert_called_once_with(
+                            object_id='51a4189acf12e53f81000001')
+                        mock_retry.assert_called_once_with(countdown=549)
+        eq_(Goal.objects.filter(user=self.user).count(), 0)
+        eq_(Profile.objects.filter(user=self.user).count(), 1)
+        eq_(Summary.objects.filter(user=self.user).count(), 0)
+
+        # Check that we fail gracefully when the user doesn't exist on our end
+        Profile.objects.all().delete()
         MisfitUser.objects.all().delete()
         with HTTMock(JsonMock().goal_http, JsonMock().profile_http,
                      JsonMock('summary_detail').summary_http):

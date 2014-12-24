@@ -120,7 +120,7 @@ def process_notification(content):
         retry_after_secs = (reset - arrow.now()).seconds
         logger.debug('Rate limit reached, will try again in %i seconds' %
                      retry_after_secs)
-        raise process_notification.retry(e, countdown=retry_after_secs)
+        raise process_notification.retry(countdown=retry_after_secs)
     except Exception:
         exc = sys.exc_info()[1]
         logger.exception("Unknown exception processing notification: %s" % exc)
