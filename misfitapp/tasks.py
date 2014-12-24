@@ -80,7 +80,7 @@ def process_notification(content):
             ownerId = message['ownerId']
             try:
                 mfuser = MisfitUser.objects.get(misfit_user_id=ownerId)
-            except mfuser.DoesNotExist:
+            except MisfitUser.DoesNotExist:
                 logger.warning('Received a notification for a user who is not '
                                'in our database with id: %s' % ownerId)
                 continue

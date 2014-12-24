@@ -15,7 +15,7 @@ from freezegun import freeze_time
 from httmock import HTTMock, urlmatch
 from misfit import exceptions as misfit_exceptions
 from misfit import Misfit
-from mock import MagicMock, patch
+from mock import call, MagicMock, patch
 from nose.tools import eq_
 
 from misfitapp import utils
@@ -207,6 +207,7 @@ class TestNotificationTask(MisfitTestBase):
         """
         Check that a task gets created to handle notification
         """
+        notify_url = reverse('misfit-notification')
         verify_signature_mock.return_value = None
         content = json.dumps(self.notification_content).encode('utf8')
         with HTTMock(JsonMock().goal_http,
@@ -214,12 +215,32 @@ class TestNotificationTask(MisfitTestBase):
                      JsonMock('summary_detail').summary_http):
             with patch('celery.app.task.Task.delay') as mock_delay:
                 mock_delay.side_effect = lambda arg: process_notification(arg)
-                self.client.post(reverse('misfit-notification'), data=content,
+                self.client.post(notify_url, data=content,
                                  content_type='application/json')
                 mock_delay.assert_called_once_with(content)
         eq_(Goal.objects.filter(user=self.user).count(), 2)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 3)
+
+        # Check that we fail gracefully when the user doesn't exist on our end
+        Goal.objects.all().delete()
+        Profile.objects.all().delete()
+        Summary.objects.all().delete()
+        MisfitUser.objects.all().delete()
+        with HTTMock(JsonMock().goal_http, JsonMock().profile_http,
+                     JsonMock('summary_detail').summary_http):
+            with patch('celery.app.task.Task.delay') as mock_delay:
+                mock_delay.side_effect = lambda arg: process_notification(arg)
+                with patch('logging.Logger.warning') as mock_warning:
+                    self.client.post(notify_url, data=content,
+                                     content_type='application/json')
+                    mock_delay.assert_called_once_with(content)
+                    mock_warning.assert_has_calls([call(
+                        'Received a notification for a user who is not in our '
+                        'database with id: %s' % self.misfit_user_id)] * 3)
+        eq_(Goal.objects.filter(user=self.user).count(), 0)
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
+        eq_(Summary.objects.filter(user=self.user).count(), 0)
 
     def test_device(self):
 
