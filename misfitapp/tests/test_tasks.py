@@ -6,6 +6,7 @@ import json
 import sys
 
 from celery import Celery
+from celery.exceptions import Reject
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import InMemoryUploadedFile
@@ -174,6 +175,26 @@ class TestImportHistoricalTask(MisfitTestBase):
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Device.objects.filter(user=self.user).count(), 0)
 
+    @patch('logging.Logger.exception')
+    @patch('celery.app.task.Task.delay')
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('misfitapp.utils.create_misfit')
+    def test_import_historical_unknown_error(self, mock_create, mock_sig,
+                                             mock_delay, mock_exc):
+        """ Test that the notification task handles unknown errors ok """
+        # Check that we fail gracefully when we run into an unknown error
+        mock_delay.side_effect = lambda a1, a2: import_historical_cls(a1, a2)
+        mock_create.side_effect = Exception('FAKE EXCEPTION')
+        try:
+            import_historical(self.misfit_user)
+            assert False, 'We should have raised an exception'
+        except Reject:
+            assert True
+        mock_exc.assert_called_once_with(
+            'Unknown exception processing notification: FAKE EXCEPTION')
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
+        eq_(Device.objects.filter(user=self.user).count(), 0)
+
 
 class TestNotificationTask(MisfitTestBase):
     def setUp(self):
@@ -272,20 +293,43 @@ class TestNotificationTask(MisfitTestBase):
         resp.headers = {'x-ratelimit-reset': 1404298869}
         exc = misfit_exceptions.MisfitRateLimitError(429, '', resp)
         mock_goal.side_effect = exc
-        mock_retry.side_effect = BaseException
+        mock_retry.side_effect = Exception
         with HTTMock(JsonMock().profile_http):
             try:
                 content = json.dumps(self.notification_content).encode('utf8')
                 self.client.post(reverse('misfit-notification'), data=content,
                                  content_type='application/json')
                 assert False, 'We should have raised an exception'
-            except BaseException:
+            except Exception:
                 assert True
         mock_delay.assert_called_once_with(content)
         mock_goal.assert_called_once_with(object_id='51a4189acf12e53f81000001')
         mock_retry.assert_called_once_with(countdown=549)
         eq_(Goal.objects.filter(user=self.user).count(), 0)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
+        eq_(Summary.objects.filter(user=self.user).count(), 0)
+
+    @patch('logging.Logger.exception')
+    @patch('celery.app.task.Task.delay')
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('misfitapp.utils.create_misfit')
+    def test_notification_unknown_error(self, mock_create, mock_sig,
+                                        mock_delay, mock_exc):
+        """ Test that the notification task handles unknown errors ok """
+        # Check that we fail gracefully when we run into an unknown error
+        mock_delay.side_effect = lambda arg: process_notification(arg)
+        mock_create.side_effect = Exception('FAKE EXCEPTION')
+        try:
+            content = json.dumps(self.notification_content).encode('utf8')
+            self.client.post(reverse('misfit-notification'), data=content,
+                             content_type='application/json')
+            assert False, 'We should have raised an exception'
+        except Reject:
+            assert True
+        mock_exc.assert_called_once_with(
+            'Unknown exception processing notification: FAKE EXCEPTION')
+        eq_(Goal.objects.filter(user=self.user).count(), 0)
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
         eq_(Summary.objects.filter(user=self.user).count(), 0)
 
     @patch('misfit.notification.MisfitNotification.verify_signature')
