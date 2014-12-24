@@ -138,6 +138,42 @@ class TestImportHistoricalTask(MisfitTestBase):
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Device.objects.filter(user=self.user).count(), 1)
 
+    @freeze_time("2014-07-02 10:52:00", tz_offset=0)
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('celery.app.task.Task.delay')
+    @patch('celery.app.task.Task.retry')
+    @patch('misfit.Misfit.device')
+    @patch('logging.Logger.debug')
+    @patch('random.randrange')
+    def test_import_historical_rate_limit(self, mock_rand, mock_dbg, mock_dev,
+                                          mock_retry, mock_delay, mock_sig):
+        mock_rand.return_value = 0
+        mock_delay.side_effect = lambda a1, a2: import_historical_cls(a1, a2)
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
+        eq_(Device.objects.filter(user=self.user).count(), 0)
+        resp = MagicMock()
+        resp.headers = {'x-ratelimit-reset': 1404298869}
+        exc = misfit_exceptions.MisfitRateLimitError(429, '', resp)
+        mock_dev.side_effect = exc
+        mock_retry.side_effect = BaseException
+        with HTTMock(JsonMock().profile_http,
+                     JsonMock().device_http,
+                     JsonMock('summary_summaries').summary_http,
+                     JsonMock().goal_http,
+                     JsonMock().session_http,
+                     JsonMock().sleep_http,
+        ):
+            try:
+                import_historical(self.misfit_user)
+                assert False, 'Should have thrown an exception'
+            except BaseException:
+                assert True
+        mock_rand.assert_called_once_with(0, 5)
+        mock_dev.assert_called_once_with()
+        mock_retry.assert_called_once_with(countdown=549)
+        eq_(Profile.objects.filter(user=self.user).count(), 1)
+        eq_(Device.objects.filter(user=self.user).count(), 0)
+
 
 class TestNotificationTask(MisfitTestBase):
     def setUp(self):
