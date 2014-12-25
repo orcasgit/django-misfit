@@ -1,3 +1,21 @@
 {
-    "sessions": []
+    "sessions": [{
+      "id":"51a4189acf12e53f82000001",
+      "activityType":"Cycling",
+      "startTime":"2014-05-19T10:26:54-04:00",
+      "duration":900,
+      "points":210.8,
+      "steps":1406,
+      "calories":25.7325,
+      "distance":0.5125
+    }, {
+      "id":"51a4189acf12e53f82000002",
+      "activityType":"Swimming",
+      "startTime":"2014-05-20T18:26:54-04:00",
+      "duration":700,
+      "points":235.2,
+      "steps":1306,
+      "calories":205.76,
+      "distance":0.75
+    }]
 }

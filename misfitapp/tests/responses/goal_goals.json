@@ -1,3 +1,13 @@
 {
-    "goals": []
+    "goals": [{
+        "id":"51a4189acf12e53f81000001",
+        "date":"2014-10-05",
+        "points":300,
+        "targetPoints":800
+    }, {
+        "id":"51a4189acf12e53f81000002",
+        "date":"2014-10-06",
+        "points":500,
+        "targetPoints":1000
+    }]
 }

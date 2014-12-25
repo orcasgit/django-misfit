@@ -56,11 +56,12 @@ def sns_subscribe(*args):
 
 
 class JsonMock:
-    def __init__(self, file_name_base=None):
+    def __init__(self, file_name_base=None, date_range=None):
         """ Build the response template """
         self.headers = {'content-type': 'application/json; charset=utf-8'}
         self.response_tmpl = {'status_code': 200, 'headers': self.headers}
         self.file_name_base = file_name_base
+        self.date_range = date_range
 
     def json_file(self):
         response = self.response_tmpl
@@ -80,14 +81,21 @@ class JsonMock:
               path='/move/resource/v1/user/me/activity/goals/.*')
     def goal_http(self, url, *args):
         """ Method to return the contents of a goal json file """
-        self.file_name_base = 'goal_' + url.path.split('/')[-2]
-        return self.json_file()
+        if not self.file_name_base:
+            self.file_name_base = 'goal_' + url.path.split('/')[-2]
+            response = self.json_file()
+            # Reset file_name_base for future requests
+            self.file_name_base = None
+        else:
+            response = self.json_file()
+        return response
 
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
               path='/move/resource/v1/user/me/activity/sessions/.*')
     def session_http(self, url, *args):
         """ Method to return the contents of a session json file """
-        self.file_name_base = 'session_' + url.path.split('/')[-2]
+        if not self.file_name_base:
+            self.file_name_base = 'session_' + url.path.split('/')[-2]
         return self.json_file()
 
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
@@ -101,8 +109,20 @@ class JsonMock:
               path='/move/resource/v1/user/me/activity/sleeps/.*')
     def sleep_http(self, url, *args):
         """ Method to return the contents of a sleep json file """
-        self.file_name_base = 'sleep_' + url.path.split('/')[-2]
-        return self.json_file()
+        if not self.file_name_base:
+            self.file_name_base = 'sleep_' + url.path.split('/')[-2]
+        if self.date_range:
+            # If a date range was specified, only return data when the query
+            # contains the specified range
+            if (url.query.find('start_date=%s' % self.date_range[0]) > -1 and
+                    url.query.find('end_date=%s' % self.date_range[1]) > -1):
+                return self.json_file()
+            else:
+                response = self.response_tmpl
+                response['content'] = '{"sleeps": []}'.encode('utf8')
+                return response
+        else:
+            return self.json_file()
 
     @urlmatch(scheme='https', netloc=r'api\.misfitwearables\.com',
               path='/move/resource/v1/user/me/activity/summary/.*')
@@ -125,12 +145,18 @@ class TestImportHistoricalTask(MisfitTestBase):
     def test_import_historical(self, verify_signature_mock):
         eq_(Profile.objects.filter(user=self.user).count(), 0)
         eq_(Device.objects.filter(user=self.user).count(), 0)
+        eq_(Goal.objects.filter(user=self.user).count(), 0)
+        eq_(Summary.objects.filter(user=self.user).count(), 0)
+        eq_(Session.objects.filter(user=self.user).count(), 0)
+        eq_(Sleep.objects.filter(user=self.user).count(), 0)
+        sleep_range = ('2014-05-01', '2014-05-31')
+        sleep_mock = JsonMock('sleep_sleeps', date_range=sleep_range)
         with HTTMock(JsonMock().profile_http,
                      JsonMock().device_http,
-                     JsonMock('summary_summaries').summary_http,
-                     JsonMock().goal_http,
-                     JsonMock().session_http,
-                     JsonMock().sleep_http,
+                     JsonMock('summary_detail').summary_http,
+                     JsonMock('goal_goals').goal_http,
+                     JsonMock('session_sessions').session_http,
+                     sleep_mock.sleep_http
         ):
             with patch('celery.app.task.Task.delay') as mock_delay:
                 mock_delay.side_effect = lambda arg1, arg2: import_historical_cls(arg1, arg2)
@@ -138,6 +164,11 @@ class TestImportHistoricalTask(MisfitTestBase):
 
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Device.objects.filter(user=self.user).count(), 1)
+        eq_(Goal.objects.filter(user=self.user).count(), 2)
+        eq_(Summary.objects.filter(user=self.user).count(), 3)
+        eq_(Session.objects.filter(user=self.user).count(), 2)
+        eq_(Sleep.objects.filter(user=self.user).count(), 1)
+        eq_(SleepSegment.objects.filter(sleep__user=self.user).count(), 2)
 
     @freeze_time("2014-07-02 10:52:00", tz_offset=0)
     @patch('misfit.notification.MisfitNotification.verify_signature')
@@ -157,13 +188,7 @@ class TestImportHistoricalTask(MisfitTestBase):
         exc = misfit_exceptions.MisfitRateLimitError(429, '', resp)
         mock_dev.side_effect = exc
         mock_retry.side_effect = BaseException
-        with HTTMock(JsonMock().profile_http,
-                     JsonMock().device_http,
-                     JsonMock('summary_summaries').summary_http,
-                     JsonMock().goal_http,
-                     JsonMock().session_http,
-                     JsonMock().sleep_http,
-        ):
+        with HTTMock(JsonMock().profile_http, JsonMock().device_http):
             try:
                 import_historical(self.misfit_user)
                 assert False, 'Should have thrown an exception'
