@@ -199,7 +199,7 @@ class Session(models.Model):
 class Sleep(models.Model):
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
     user = models.ForeignKey(UserModel)
-    auto_detected = models.BooleanField()
+    auto_detected = models.BooleanField(default=True)
     start_time = models.DateTimeField()
     duration = models.IntegerField()
 
