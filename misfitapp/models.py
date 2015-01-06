@@ -239,7 +239,7 @@ class Sleep(models.Model):
                         # Could happen if Misfit gives us overlapping
                         # data due to the date range bug in their API.
                         pass
-        SleepSegment.objects.bulk_create(seg_list)
+        SleepSegment.objects.bulk_create(dedupe_by_field(seg_list, 'time'))
 
 
 @python_2_unicode_compatible
