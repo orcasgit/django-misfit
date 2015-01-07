@@ -215,30 +215,22 @@ class Sleep(models.Model):
         Imports all Sleep and Sleep Segment data from misfit for the specified date range,
         chunking API calls if needed.
         """
-        # Keep track of the data we already have
-        exists = cls.objects.filter(user_id=uid,
-                                    start_time__gte=start_date,
-                                    start_time__lte=end_date).values_list('start_time', flat=True)
+
         seg_list = []
         date_chunks = chunkify_dates(start_date, end_date, 30)
         for start, end in date_chunks:
             sleeps = misfit.sleep(start_date=start, end_date=end)
             for sleep in sleeps:
-                if sleep.startTime not in exists:
-                    data = cc_to_underscore_keys(sleep.data)
-                    data['user_id'] = uid
-                    segments = data.pop('sleep_details')
-                    s = cls(**data)
-                    try:
-                        s.save()
-                        for seg in segments:
-                            seg_list.append(SleepSegment(sleep=s,
-                                                         time=seg['datetime'],
-                                                         sleep_type=seg['value']))
-                    except IntegrityError:
-                        # Could happen if Misfit gives us overlapping
-                        # data due to the date range bug in their API.
-                        pass
+                data = cc_to_underscore_keys(sleep.data)
+                data['user_id'] = uid
+                segments = data.pop('sleep_details')
+                s = cls(**data)
+                s, created = cls.objects.get_or_create(**data)
+                if created:
+                    for seg in segments:
+                        seg_list.append(SleepSegment(sleep_id=s.pk,
+                                                     time=seg['datetime'],
+                                                     sleep_type=seg['value']))
         SleepSegment.objects.bulk_create(dedupe_by_field(seg_list, 'time'))
 
 

@@ -18,7 +18,7 @@ def cc_to_underscore_keys(dictionary):
 def chunkify_dates(start, end, days_in_chunk=DAYS_IN_CHUNK):
     """
     Return a list of tuples that chunks the date range into ranges
-    of length days_in_chunk, exclusive of the end date. So the end
+    of length days_in_chunk, inclusive of the end date. So the end
     date of one chunk is equal to the start date of the chunk after.
     """
     chunks = []

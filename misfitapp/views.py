@@ -71,11 +71,12 @@ def complete(request):
                                         redirect_uri=redirect_uri)
         access_token = auth.fetch_token(request.GET['code'],
                                         request.GET['state'])
+        misfit = utils.create_misfit(access_token)
+        profile = misfit.profile()
     except:
         return redirect(reverse('misfit-error'))
 
-    misfit = utils.create_misfit(access_token)
-    profile = misfit.profile()
+
     user_updates = {'access_token': access_token,
                     'misfit_user_id': profile.userId}
     misfit_user = MisfitUser.objects.filter(user=request.user)
@@ -88,7 +89,7 @@ def complete(request):
     # Add the Misfit user info to the session
     request.session['misfit_profile'] = profile.data
 
-    # Import their data TODO: Fix failing tests, when below line is uncommented
+    # Import their data
     import_historical.delay(misfit_user)
 
     next_url = request.session.pop('misfit_next', None) or utils.get_setting(

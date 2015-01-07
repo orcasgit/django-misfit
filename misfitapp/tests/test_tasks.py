@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import arrow
 import celery
+import datetime
 import json
 import sys
 
@@ -219,6 +220,22 @@ class TestImportHistoricalTask(MisfitTestBase):
             'Unknown exception processing notification: FAKE EXCEPTION')
         eq_(Profile.objects.filter(user=self.user).count(), 0)
         eq_(Device.objects.filter(user=self.user).count(), 0)
+
+
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    def test_import_sleep(self, verify_signature_mock):
+        """ Test that calls to import sleeps are indempotent. """
+        misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
+        uuid = self.user.id
+        with HTTMock(JsonMock('sleep_sleeps').sleep_http):
+            Sleep.create_from_misfit(misfit,
+                                     uuid,
+                                     start_date=datetime.date(2014, 1, 1),
+                                     end_date=datetime.date(2014, 1, 31))
+            Sleep.create_from_misfit(misfit,
+                                     uuid,
+                                     start_date=datetime.date(2014, 1, 1),
+                                     end_date=datetime.date(2014, 1, 31))
 
 
 class TestNotificationTask(MisfitTestBase):
