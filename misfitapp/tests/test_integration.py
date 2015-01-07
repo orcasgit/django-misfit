@@ -4,6 +4,7 @@ from django.core.urlresolvers import reverse
 from django.http import HttpRequest
 from misfit import Misfit
 from misfit.auth import MisfitAuth
+from misfit.exceptions import MisfitRateLimitError
 from mock import patch
 
 from misfitapp import utils
@@ -148,9 +149,11 @@ class TestCompleteView(MisfitTestBase):
         super(TestCompleteView, self).setUp()
         self.misfit_user.delete()
 
-    def _get(self, use_token=True, use_verifier=True, **kwargs):
+    def _get(self, use_token=True, use_verifier=True, use_limiting=False, **kwargs):
         MisfitAuth.fetch_token = mock.MagicMock(return_value=self.access_token)
         Misfit.profile = mock.MagicMock(return_value=self.profile)
+        if use_limiting:
+            Misfit.profile.side_effect = MisfitRateLimitError(429, 'Ooopsy.')
         if use_token:
             self._set_session_vars(state=self.state)
         get_kwargs = kwargs.pop('get_kwargs', {})
@@ -159,6 +162,14 @@ class TestCompleteView(MisfitTestBase):
                                'state': self.state})
         return super(TestCompleteView, self)._get(get_kwargs=get_kwargs,
                                                   **kwargs)
+
+
+
+    def test_ratelimiting(self):
+        with patch('celery.app.task.Task.delay') as mock_delay:
+            response = self._get(use_limiting=True)
+            self.assertRedirectsNoFollow(response, reverse('misfit-error'))
+
 
     def test_get(self):
         """
