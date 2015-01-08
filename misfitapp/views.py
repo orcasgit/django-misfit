@@ -54,7 +54,9 @@ def complete(request):
     After the user authorizes us, Misfit sends a callback to this URL to
     complete authentication.
 
-    If there was an error, the user is redirected again to the `error` view.
+    If there was an error, the user is redirected to the url set in
+    :ref:`MISFIT_ERROR_REDIRECT` if it is set, or to the `error` view
+    otherwise.
 
     If the authorization was successful, the credentials are stored for us to
     use later, and the user is redirected. If 'next_url' is in the request
@@ -74,7 +76,8 @@ def complete(request):
         misfit = utils.create_misfit(access_token)
         profile = misfit.profile()
     except:
-        return redirect(reverse('misfit-error'))
+        next_url = utils.get_setting('MISFIT_ERROR_REDIRECT') or reverse('misfit-error')
+        return redirect(next_url)
 
 
     user_updates = {'access_token': access_token,

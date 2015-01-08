@@ -10,8 +10,12 @@ MISFIT_LOGIN_REDIRECT = '/'
 # removed.
 MISFIT_LOGOUT_REDIRECT = '/'
 
+# Where to redirect to if there is an error while authenticating a Misfit
+# user.
+MISFIT_ERROR_REDIRECT = None
+
 # The template to use when an unavoidable error occurs during Misfit
-# integration.
+# integration. This setting is ignored if MISFIT_ERROR_REDIRECT is set.
 MISFIT_ERROR_TEMPLATE = 'misfit/error.html'
 
 # The default message used by the misfit_integration_warning decorator to

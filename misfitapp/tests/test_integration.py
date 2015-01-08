@@ -163,6 +163,13 @@ class TestCompleteView(MisfitTestBase):
         return super(TestCompleteView, self)._get(get_kwargs=get_kwargs,
                                                   **kwargs)
 
+    def test_error_redirect(self):
+        """  Complete view should redirect to MISFIT_ERROR_REDIRECT if set. """
+        url = '/'
+        with patch('celery.app.task.Task.delay') as mock_delay:
+            with self.settings(MISFIT_ERROR_REDIRECT=url):
+                response = self._get(use_limiting=True)
+        self.assertRedirectsNoFollow(response, url)
 
 
     def test_ratelimiting(self):
