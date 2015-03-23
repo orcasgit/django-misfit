@@ -1,7 +1,7 @@
 language: python
 python: 3.3
 env:
-  - TOX_ENV=pypy-trunk
+  #- TOX_ENV=pypy-trunk
   - TOX_ENV=pypy-1.7.X
   - TOX_ENV=pypy-1.6.X
   - TOX_ENV=pypy-1.4.X
