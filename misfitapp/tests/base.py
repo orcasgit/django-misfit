@@ -1,20 +1,20 @@
-from mock import patch, Mock
+import django
 import random
-try:
-    from urllib.parse import urlencode
-    from string import ascii_letters
-except:
-    # Python 2.x
-    from urllib import urlencode
-    from string import letters as ascii_letters
 
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
 from django.test import TestCase
-
 from misfit import Misfit, MisfitProfile
+from mock import patch, Mock
 
 from misfitapp.models import MisfitUser
+
+try:
+    from urllib.parse import urlencode
+    from string import ascii_letters
+except:  # Python 2.x
+    from urllib import urlencode
+    from string import letters as ascii_letters
 
 
 class MisfitTestBase(TestCase):
@@ -63,8 +63,9 @@ class MisfitTestBase(TestCase):
         loading the page at that URL.
         """
         self.assertEqual(response.status_code, status_code)
-        full_url = self.TEST_SERVER + url
-        self.assertEqual(response._headers['location'][1], full_url)
+        if django.VERSION < (1,9):
+            url = self.TEST_SERVER + url
+        self.assertEqual(response._headers['location'][1], url)
 
     def _get(self, url_name=None, url_kwargs=None, get_kwargs=None, **kwargs):
         """Convenience wrapper for test client GET request."""
