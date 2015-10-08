@@ -29,9 +29,16 @@ if not settings.configured:
 
         USE_TZ = True,
 
-        TEMPLATE_DIRS=(
-            os.path.join(PROJECT_PATH, 'misfitapp', 'templates'),
-            os.path.join(PROJECT_PATH, 'misfitapp', 'tests', 'templates'),),
+        TEMPLATES=[
+            {
+                'BACKEND': 'django.template.backends.django.DjangoTemplates',
+                'APP_DIRS': True,
+                'DIRS': [
+                    os.path.join(PROJECT_PATH, 'misfitapp', 'templates'),
+                    os.path.join(PROJECT_PATH, 'misfitapp', 'tests', 'templates')
+                ],
+            },
+        ],
 
         MISFIT_CLIENT_ID='FAKE_ID',
         MISFIT_CLIENT_SECRET='FAKE_SECRET',

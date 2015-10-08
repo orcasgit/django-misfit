@@ -1,7 +1,9 @@
 from freezegun import freeze_time
+from misfit.notification import MisfitMessage
 from misfitapp.models import (
     Device,
     Goal,
+    MisfitModel,
     MisfitUser,
     Profile,
     Sleep,
@@ -21,6 +23,17 @@ class TestMisfitModels(MisfitTestBase):
         self.today = datetime.date.today()
         self.now = datetime.datetime.now()
         super(TestMisfitModels, self).setUp()
+
+    def test_misfit_model(self):
+        """ Test MisfitModel """
+        with self.assertRaises(NotImplementedError):
+            MisfitModel.import_from_misfit(None, None)
+        with self.assertRaises(NotImplementedError):
+            MisfitModel.import_all_from_misfit(None, None)
+        msg = MisfitMessage({'action': 'UNKNOWN_ACTION'})
+        error_msg = 'Unknown message action: UNKNOWN_ACTION'
+        with self.assertRaisesRegexp(Exception, error_msg):
+            MisfitModel.process_message(msg, None, None)
 
     def test_misfit_user(self):
         """ MisfitUser was already created in base, now test the properties """

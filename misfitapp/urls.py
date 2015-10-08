@@ -1,11 +1,9 @@
-from django.conf.urls import patterns, url
+from django.conf.urls import url
 
 from . import views
 
 
-urlpatterns = patterns(
-    '',
-
+urlpatterns = [
     # OAuth authentication
     url(r'^login/$', views.login, name='misfit-login'),
     url(r'^complete/$', views.complete, name='misfit-complete'),
@@ -14,4 +12,4 @@ urlpatterns = patterns(
 
     # Misfit notifications
     url(r'^notification/$', views.notification, name='misfit-notification')
-)
+]
