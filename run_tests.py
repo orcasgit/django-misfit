@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import coverage
+import datetime
 import optparse
 import os
 import sys
@@ -42,6 +43,7 @@ if not settings.configured:
 
         MISFIT_CLIENT_ID='FAKE_ID',
         MISFIT_CLIENT_SECRET='FAKE_SECRET',
+        MISFIT_HISTORIC_TIMEDELTA=datetime.datetime.now() - datetime.datetime(2014, 1, 1),
 
         LOGGING = {
             'version': 1,
