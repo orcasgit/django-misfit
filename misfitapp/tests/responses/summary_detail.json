@@ -6,7 +6,8 @@
             "steps": 3650,
             "calories": 1687.4735,
             "activityCalories": 412.3124,
-            "distance": 1.18
+            "distance": 1.18,
+            "unknown_new_field": "fakestuff"
         },
         {
             "date": "2014-10-06",
@@ -14,7 +15,8 @@
             "steps": 4330,
             "calories": 1707.8484,
             "activityCalories": 412.3124,
-            "distance": 1.3982
+            "distance": 1.3982,
+            "unknown_new_field": "fakestuff"
         },
         {
             "date": "2014-10-07",
@@ -22,7 +24,8 @@
             "steps": 4022,
             "calories": 1698.7234,
             "activityCalories": 412.3124,
-            "distance": 1.2988
+            "distance": 1.2988,
+            "unknown_new_field": "fakestuff"
         }
     ]
 }

@@ -3,7 +3,7 @@ from django import template
 from misfitapp import utils
 
 
-register= template.Library()
+register = template.Library()
 
 
 @register.filter

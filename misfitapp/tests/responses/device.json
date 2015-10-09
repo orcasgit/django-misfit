@@ -3,5 +3,7 @@
     "deviceType": "shine",
     "firmwareVersion": "SH0.1.0r",
     "id": "548b1b3d33822a17a23f4e62",
-    "serialNumber": "SH0BZ03ZZ4"
+    "serialNumber": "SH0BZ03ZZ4",
+    "lastSyncTime": 1421213093,
+    "unknown_new_field": "fakestuff"
 }

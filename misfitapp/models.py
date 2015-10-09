@@ -2,15 +2,70 @@ from django.conf import settings
 from django.db import models, IntegrityError
 from django.utils.encoding import python_2_unicode_compatible
 from math import pow
+from misfit.notification import MisfitMessage
 import datetime
 
-from .extras import (
-    cc_to_underscore_keys,
-    chunkify_dates,
-    dedupe_by_field)
-
+DAYS_IN_CHUNK = 30
 MAX_KEY_LEN = 24
+MISFIT_HISTORIC_TIMEDELTA = getattr(settings, 'MISFIT_HISTORIC_TIMEDELTA',
+                                    datetime.timedelta(days=90))
+HISTORIC_START_DATE = datetime.date.today() - MISFIT_HISTORIC_TIMEDELTA
 UserModel = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
+
+
+def chunkify_dates(start, end, days_in_chunk=DAYS_IN_CHUNK):
+    """
+    Return a list of tuples that chunks the date range into ranges
+    of length days_in_chunk, inclusive of the end date. So the end
+    date of one chunk is equal to the start date of the chunk after.
+    """
+    chunks = []
+    s = start
+    e = start + datetime.timedelta(days=days_in_chunk)
+    while e - datetime.timedelta(days=days_in_chunk) < end:
+        e = min(e, end)
+        chunks.append((s, e))
+        s = e
+        e = s + datetime.timedelta(days=days_in_chunk)
+    return chunks
+
+
+def dedupe_by_field(l, field):
+    """
+    Returns a new list with duplicate objects removed. Objects are equal
+    iff the have the same value for 'field'.
+    """
+    d = dict((getattr(obj, field), obj) for obj in l)
+    return list(d.values())
+
+
+class MisfitModel(models.Model):
+    class Meta:
+        abstract = True
+
+    @classmethod
+    def process_message(cls, message, misfit, uid):
+        if message.action == MisfitMessage.DELETED:
+            filters = {'user_id': uid} if cls == Profile else {'pk': message.id}
+            cls.objects.filter(**filters).delete()
+        elif message.action in [MisfitMessage.CREATED, MisfitMessage.UPDATED]:
+            return cls.import_from_misfit(misfit, uid, object_id=message.id)
+        else:
+            raise Exception("Unknown message action: %s" % message.action)
+
+    @classmethod
+    def import_from_misfit(cls, misfit, uid, **kwargs):
+        """ Derived classes should implement this """
+        raise NotImplementedError
+
+    @classmethod
+    def import_all_from_misfit(cls, misfit, uid):
+        """
+        This is used to import all data from misfit when a user is initially
+        linked. By default it just runs import_from_misfit, but a model with
+        more complex needs can override this
+        """
+        cls.import_from_misfit(misfit, uid)
 
 
 @python_2_unicode_compatible
@@ -21,14 +76,11 @@ class MisfitUser(models.Model):
     last_update = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        if hasattr(self.user, 'get_username'):
-            return self.user.get_username()
-        else:  # Django 1.4
-            return self.user.username
+        return self.user.get_username()
 
 
 @python_2_unicode_compatible
-class Summary(models.Model):
+class Summary(MisfitModel):
     user = models.ForeignKey(UserModel)
     date = models.DateField()
     points = models.FloatField()
@@ -44,29 +96,41 @@ class Summary(models.Model):
         unique_together = ('user', 'date')
 
     @classmethod
-    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
+    def import_from_misfit(cls, misfit, uid, update=False,
+                           start_date=HISTORIC_START_DATE,
+                           end_date=datetime.date.today()):
         """
-        Imports all Summary data from misfit for the specified date range, chunking API
-        calls if needed.
+        Imports all Summary data from misfit for the specified date range,
+        chunking API calls if needed. If update is True, update existing records
         """
         # Keep track of the data we already have
         exists = cls.objects.filter(user_id=uid,
                                     date__gte=start_date,
                                     date__lte=end_date).values_list('date', flat=True)
-        obj_list = []
         date_chunks = chunkify_dates(start_date, end_date, 30)
+        obj_list = []
         for start, end in date_chunks:
             summaries = misfit.summary(start_date=start, end_date=end, detail=True)
             for summary in summaries:
-                if summary.date.date() not in exists:
-                    data = cc_to_underscore_keys(summary.data)
-                    data['user_id'] = uid
-                    obj_list.append(cls(**data))
+                if update or summary.date.date() not in exists:
+                    data = {
+                        'date': summary.date.date(),
+                        'points': summary.points,
+                        'steps': summary.steps,
+                        'calories': summary.calories,
+                        'activity_calories': summary.activityCalories,
+                        'distance': summary.distance
+                    }
+                    if update:
+                        cls.objects.update_or_create(
+                            user_id=uid, date=data['date'], defaults=data)
+                    else:
+                        obj_list.append(cls(user_id=uid, **data))
         cls.objects.bulk_create(dedupe_by_field(obj_list, 'date'))
 
 
 @python_2_unicode_compatible
-class Profile(models.Model):
+class Profile(MisfitModel):
     GENDER_TYPES = (('male', 'male'), ('female', 'female'))
 
     user = models.ForeignKey(UserModel, unique=True)
@@ -74,21 +138,28 @@ class Profile(models.Model):
     birthday = models.DateField()
     gender = models.CharField(choices=GENDER_TYPES, max_length=6)
     name = models.TextField()
+    avatar = models.URLField(null=True, blank=True)
 
     def __str__(self):
         return self.email
 
     @classmethod
-    def create_from_misfit(cls, misfit, uid):
-        if not cls.objects.filter(user_id=uid).exists():
-            profile = misfit.profile()
-            data = cc_to_underscore_keys(profile.data)
-            data['user_id'] = uid
-            cls(**data).save()
+    def import_from_misfit(cls, misfit, uid, object_id=None):
+        profile = misfit.profile()
+        data = {
+            'email': profile.email,
+            'birthday': profile.birthday,
+            'gender': profile.gender,
+            'name': profile.name
+        }
+        # Check for the undocumented avatar data
+        if hasattr(profile, 'avatar') and profile.avatar:
+            data['avatar'] = profile.avatar
+        return cls.objects.update_or_create(user_id=uid, defaults=data)
 
 
 @python_2_unicode_compatible
-class Device(models.Model):
+class Device(MisfitModel):
     DEVICE_TYPES = (('shine', 'shine'),)
 
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
@@ -97,21 +168,29 @@ class Device(models.Model):
     serial_number = models.CharField(max_length=100)
     firmware_version = models.CharField(max_length=100)
     battery_level = models.SmallIntegerField()
+    last_sync_time = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return '%s: %s' % (self.device_type, self.serial_number)
 
     @classmethod
-    def create_from_misfit(cls, misfit, uid):
-        if not cls.objects.filter(user_id=uid).exists():
-            device = misfit.device()
-            data = cc_to_underscore_keys(device.data)
-            data['user_id'] = uid
-            cls(**data).save()
+    def import_from_misfit(cls, misfit, uid, object_id=None):
+        device = misfit.device()
+        data = {
+            'id': device.id,
+            'device_type': device.deviceType,
+            'serial_number': device.serialNumber,
+            'firmware_version': device.firmwareVersion,
+            'battery_level': device.batteryLevel
+        }
+        # Check for the undocumented lastSyncTime data
+        if hasattr(device, 'lastSyncTime') and device.lastSyncTime:
+            data['last_sync_time'] = device.lastSyncTime.datetime
+        return cls.objects.update_or_create(user_id=uid, defaults=data)
 
 
 @python_2_unicode_compatible
-class Goal(models.Model):
+class Goal(MisfitModel):
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
     user = models.ForeignKey(UserModel)
     date = models.DateField()
@@ -127,11 +206,29 @@ class Goal(models.Model):
         unique_together = ('user', 'date')
 
     @classmethod
-    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
-        """
-        Imports all Goal data from misfit for the specified date range, chunking API
-        calls if needed.
-        """
+    def data_dict(cls, obj):
+        result = {
+            'id': obj.id,
+            'date': obj.date.date(),
+            'points': obj.points,
+            'target_points': obj.targetPoints
+        }
+        # timeZoneOffset is not in the current API documentation, but I've
+        # seen it before. I think we need to keep an eye out for it
+        if hasattr(obj, 'timeZoneOffset') and obj.timeZoneOffset:
+            result['time_zone_offset'] = obj.timeZoneOffset
+        return result
+
+    @classmethod
+    def import_from_misfit(cls, misfit, uid, object_id=None):
+        data = cls.data_dict(misfit.goal(object_id=object_id))
+        return cls.objects.update_or_create(
+            user_id=uid, id=data['id'], defaults=data)
+
+    @classmethod
+    def import_all_from_misfit(cls, misfit, uid,
+                               start_date=HISTORIC_START_DATE,
+                               end_date=datetime.date.today()):
         # Keep track of the data we already have
         exists = cls.objects.filter(user_id=uid,
                                     date__gte=start_date,
@@ -142,14 +239,13 @@ class Goal(models.Model):
             goals = misfit.goal(start_date=start, end_date=end)
             for goal in goals:
                 if goal.date.date() not in exists:
-                    data = cc_to_underscore_keys(goal.data)
-                    data['user_id'] = uid
-                    obj_list.append(cls(**data))
+                    model_data = cls.data_dict(goal)
+                    obj_list.append(cls(user_id=uid, **model_data))
         cls.objects.bulk_create(dedupe_by_field(obj_list, 'date'))
 
 
 @python_2_unicode_compatible
-class Session(models.Model):
+class Session(MisfitModel):
     ACTIVITY_TYPES = (('cycling', 'cycling'),
                       ('swimming', 'swimming'),
                       ('walking', 'walking'),
@@ -174,11 +270,28 @@ class Session(models.Model):
         unique_together = ('user', 'start_time')
 
     @classmethod
-    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
-        """
-        Imports all Session data from misfit for the specified date range, chunking API
-        calls if needed.
-        """
+    def data_dict(cls, obj):
+        return {
+            'id': obj.id,
+            'activity_type': obj.activityType,
+            'start_time': obj.startTime.datetime,
+            'duration': obj.duration,
+            'points': obj.points,
+            'steps': obj.steps,
+            'calories': obj.calories,
+            'distance': obj.distance
+        }
+
+    @classmethod
+    def import_from_misfit(cls, misfit, uid, object_id=None):
+        data = cls.data_dict(misfit.session(object_id=object_id))
+        return cls.objects.update_or_create(
+            user_id=uid, start_time=data['start_time'], defaults=data)
+
+    @classmethod
+    def import_all_from_misfit(cls, misfit, uid,
+                               start_date=HISTORIC_START_DATE,
+                               end_date=datetime.date.today()):
         # Keep track of the data we already have
         exists = cls.objects.filter(user_id=uid,
                                     start_time__gte=start_date,
@@ -189,14 +302,13 @@ class Session(models.Model):
             sessions = misfit.session(start_date=start, end_date=end)
             for session in sessions:
                 if session.startTime not in exists:
-                    data = cc_to_underscore_keys(session.data)
-                    data['user_id'] = uid
-                    obj_list.append(cls(**data))
+                    model_data = cls.data_dict(session)
+                    obj_list.append(cls(user_id=uid, **model_data))
         cls.objects.bulk_create(dedupe_by_field(obj_list, 'start_time'))
 
 
 @python_2_unicode_compatible
-class Sleep(models.Model):
+class Sleep(MisfitModel):
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
     user = models.ForeignKey(UserModel)
     auto_detected = models.BooleanField(default=True)
@@ -206,32 +318,50 @@ class Sleep(models.Model):
     def __str__(self):
         return '%s %s' % (self.start_time, self.duration)
 
-    class Meta:
-        unique_together = ('user', 'start_time')
+    @classmethod
+    def data_dict(cls, obj):
+        return {
+            'id': obj.id,
+            'auto_detected': obj.autoDetected,
+            'start_time': obj.startTime.datetime,
+            'duration': obj.duration
+        }
 
     @classmethod
-    def create_from_misfit(cls, misfit, uid, start_date=datetime.date(2014,1,1), end_date=datetime.date.today()):
-        """
-        Imports all Sleep and Sleep Segment data from misfit for the specified date range,
-        chunking API calls if needed.
-        """
-
+    def import_misfit_sleeps(cls, misfit, uid, sleeps):
+        segments = {}
+        for misfit_sleep in sleeps:
+            data = cls.data_dict(misfit_sleep)
+            try:
+                sleep, created = cls.objects.update_or_create(
+                    id=data['id'], user_id=uid, defaults=data)
+            except:
+                for sleep in sleeps:
+                    print(sleep.data)
+                raise Exception
+            segments[sleep.id] = misfit_sleep.data['sleepDetails']
+            if not created:
+                SleepSegment.objects.filter(sleep=sleep).delete()
         seg_list = []
-        date_chunks = chunkify_dates(start_date, end_date, 30)
-        for start, end in date_chunks:
-            sleeps = misfit.sleep(start_date=start, end_date=end)
-            for sleep in sleeps:
-                data = cc_to_underscore_keys(sleep.data)
-                data['user_id'] = uid
-                segments = data.pop('sleep_details')
-                s = cls(**data)
-                s, created = cls.objects.get_or_create(**data)
-                if created:
-                    for seg in segments:
-                        seg_list.append(SleepSegment(sleep_id=s.pk,
-                                                     time=seg['datetime'],
-                                                     sleep_type=seg['value']))
+        for sleep_id, segments in segments.items():
+            for segment in segments:
+                seg_list.append(SleepSegment(sleep_id=sleep_id,
+                                             time=segment['datetime'],
+                                             sleep_type=segment['value']))
         SleepSegment.objects.bulk_create(dedupe_by_field(seg_list, 'time'))
+
+    @classmethod
+    def import_from_misfit(cls, misfit, uid, object_id=None):
+        cls.import_misfit_sleeps(misfit, uid, [misfit.sleep(object_id=object_id)])
+
+    @classmethod
+    def import_all_from_misfit(cls, misfit, uid,
+                               start_date=HISTORIC_START_DATE,
+                               end_date=datetime.date.today()):
+        sleeps = []
+        for start, end in chunkify_dates(start_date, end_date, 30):
+            sleeps += misfit.sleep(start_date=start, end_date=end)
+        cls.import_misfit_sleeps(misfit, uid, sleeps)
 
 
 @python_2_unicode_compatible

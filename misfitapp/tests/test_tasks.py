@@ -17,6 +17,7 @@ from freezegun import freeze_time
 from httmock import HTTMock, urlmatch
 from misfit import exceptions as misfit_exceptions
 from misfit import Misfit
+from misfit.notification import MisfitMessage
 from mock import call, MagicMock, patch
 from nose.tools import eq_
 
@@ -33,11 +34,6 @@ from misfitapp.models import (
 )
 from misfitapp.tasks import (
     process_notification,
-    process_device,
-    process_goal,
-    process_profile,
-    process_session,
-    process_sleep,
     import_historical,
     import_historical_cls,
     )
@@ -177,10 +173,8 @@ class TestImportHistoricalTask(MisfitTestBase):
     @patch('celery.app.task.Task.retry')
     @patch('misfit.Misfit.device')
     @patch('logging.Logger.debug')
-    @patch('random.randrange')
-    def test_import_historical_rate_limit(self, mock_rand, mock_dbg, mock_dev,
+    def test_import_historical_rate_limit(self, mock_dbg, mock_dev,
                                           mock_retry, mock_delay, mock_sig):
-        mock_rand.return_value = 0
         mock_delay.side_effect = lambda a1, a2: import_historical_cls(a1, a2)
         eq_(Profile.objects.filter(user=self.user).count(), 0)
         eq_(Device.objects.filter(user=self.user).count(), 0)
@@ -195,7 +189,6 @@ class TestImportHistoricalTask(MisfitTestBase):
                 assert False, 'Should have thrown an exception'
             except BaseException:
                 assert True
-        mock_rand.assert_called_once_with(0, 5)
         mock_dev.assert_called_once_with()
         mock_retry.assert_called_once_with(countdown=549)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
@@ -217,25 +210,19 @@ class TestImportHistoricalTask(MisfitTestBase):
         except Reject:
             assert True
         mock_exc.assert_called_once_with(
-            'Unknown exception processing notification: FAKE EXCEPTION')
+            'Unknown exception importing data: FAKE EXCEPTION')
         eq_(Profile.objects.filter(user=self.user).count(), 0)
         eq_(Device.objects.filter(user=self.user).count(), 0)
 
 
     @patch('misfit.notification.MisfitNotification.verify_signature')
     def test_import_sleep(self, verify_signature_mock):
-        """ Test that calls to import sleeps are indempotent. """
+        """ Test that calls to import sleeps are idempotent. """
         misfit = utils.create_misfit(access_token=self.misfit_user.access_token)
         uuid = self.user.id
         with HTTMock(JsonMock('sleep_sleeps').sleep_http):
-            Sleep.create_from_misfit(misfit,
-                                     uuid,
-                                     start_date=datetime.date(2014, 1, 1),
-                                     end_date=datetime.date(2014, 1, 31))
-            Sleep.create_from_misfit(misfit,
-                                     uuid,
-                                     start_date=datetime.date(2014, 1, 1),
-                                     end_date=datetime.date(2014, 1, 31))
+            Sleep.import_all_from_misfit(misfit, uuid)
+            Sleep.import_all_from_misfit(misfit, uuid)
 
 
 class TestNotificationTask(MisfitTestBase):
@@ -408,7 +395,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
             }
-            process_device(message, misfit, self.user.pk)
+            Device.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Device.objects.all().count(), 1)
         eq_(Device.objects.all()[0].user_id, self.user.pk)
         eq_(Device.objects.filter(user_id=self.user.pk).count(), 1)
@@ -422,7 +409,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
                    }
-            process_device(message, misfit, self.user.pk)
+            Device.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Device.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Delete
@@ -432,7 +419,7 @@ class TestNotificationTask(MisfitTestBase):
                    "ownerId": self.misfit_user_id,
                    "updatedAt": "2014-10-17 12:00:00 UTC"
         }
-        process_device(message, misfit, self.user.pk)
+        Device.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Device.objects.filter(user_id=self.user.pk).count(), 0)
 
 
@@ -449,7 +436,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
                    }
-            process_goal(message, misfit, self.user.pk)
+            Goal.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Goal.objects.all().count(), 1)
         eq_(Goal.objects.all()[0].user_id, self.user.pk)
         eq_(Goal.objects.filter(user_id=self.user.pk).count(), 1)
@@ -463,7 +450,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
                    }
-            process_goal(message, misfit, self.user.pk)
+            Goal.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Goal.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Delete
@@ -473,7 +460,7 @@ class TestNotificationTask(MisfitTestBase):
                    "ownerId": self.misfit_user_id,
                    "updatedAt": "2014-10-17 12:00:00 UTC"
         }
-        process_goal(message, misfit, self.user.pk)
+        Goal.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Goal.objects.filter(user_id=self.user.pk).count(), 0)
 
     def test_profile(self):
@@ -489,7 +476,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
             }
-            process_profile(message, misfit, self.user.pk)
+            Profile.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Profile.objects.all().count(), 1)
         eq_(Profile.objects.all()[0].user_id, self.user.pk)
         eq_(Profile.objects.filter(user_id=self.user.pk).count(), 1)
@@ -503,7 +490,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
                    }
-            process_profile(message, misfit, self.user.pk)
+            Profile.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Profile.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Delete
@@ -513,7 +500,7 @@ class TestNotificationTask(MisfitTestBase):
                    "ownerId": self.misfit_user_id,
                    "updatedAt": "2014-10-17 12:00:00 UTC"
         }
-        process_profile(message, misfit, self.user.pk)
+        Profile.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Profile.objects.filter(user_id=self.user.pk).count(), 0)
 
 
@@ -530,7 +517,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
                    }
-            process_session(message, misfit, self.user.pk)
+            Session.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Session.objects.all().count(), 1)
         eq_(Session.objects.all()[0].user_id, self.user.pk)
         eq_(Session.objects.filter(user_id=self.user.pk).count(), 1)
@@ -544,7 +531,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
             }
-            process_session(message, misfit, self.user.pk)
+            Session.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Session.objects.filter(user_id=self.user.pk).count(), 1)
 
         # Delete
@@ -554,7 +541,7 @@ class TestNotificationTask(MisfitTestBase):
                    "ownerId": self.misfit_user_id,
                    "updatedAt": "2014-10-17 12:00:00 UTC"
         }
-        process_session(message, misfit, self.user.pk)
+        Session.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Session.objects.filter(user_id=self.user.pk).count(), 0)
 
 
@@ -572,7 +559,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
                    }
-            process_sleep(message, misfit, self.user.pk)
+            Sleep.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Sleep.objects.all().count(), 1)
         sleep = Sleep.objects.all()[0]
         eq_(sleep.user_id, self.user.pk)
@@ -588,7 +575,7 @@ class TestNotificationTask(MisfitTestBase):
                        "ownerId": self.misfit_user_id,
                        "updatedAt": "2014-10-17 12:00:00 UTC"
             }
-            process_sleep(message, misfit, self.user.pk)
+            Sleep.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Sleep.objects.filter(user_id=self.user.pk).count(), 1)
         eq_(SleepSegment.objects.filter(sleep=sleep).count(), 4)
 
@@ -599,6 +586,6 @@ class TestNotificationTask(MisfitTestBase):
                    "ownerId": self.misfit_user_id,
                    "updatedAt": "2014-10-17 12:00:00 UTC"
         }
-        process_sleep(message, misfit, self.user.pk)
+        Sleep.process_message(MisfitMessage(message), misfit, self.user.pk)
         eq_(Sleep.objects.filter(user_id=self.user.pk).count(), 0)
         eq_(SleepSegment.objects.filter(sleep=sleep).count(), 0)

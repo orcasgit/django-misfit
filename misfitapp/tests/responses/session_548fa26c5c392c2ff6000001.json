@@ -6,5 +6,6 @@
     "id": "548fa26c5c392c2ff6000001",
     "points": 311.2,
     "startTime": "2014-12-15T17:29:00-08:00",
-    "steps": 2744
+    "steps": 2744,
+    "unknown_new_field": "fakestuff"
 }

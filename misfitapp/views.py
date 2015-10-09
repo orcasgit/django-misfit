@@ -69,8 +69,9 @@ def complete(request):
     """
     try:
         redirect_uri = request.build_absolute_uri(reverse('misfit-complete'))
-        auth = utils.create_misfit_auth(state=request.session.pop('state'),
+        auth = utils.create_misfit_auth(state=request.session['state'],
                                         redirect_uri=redirect_uri)
+        del request.session['state']
         access_token = auth.fetch_token(request.GET['code'],
                                         request.GET['state'])
         misfit = utils.create_misfit(access_token)
@@ -78,7 +79,6 @@ def complete(request):
     except:
         next_url = utils.get_setting('MISFIT_ERROR_REDIRECT') or reverse('misfit-error')
         return redirect(next_url)
-
 
     user_updates = {'access_token': access_token,
                     'misfit_user_id': profile.userId}

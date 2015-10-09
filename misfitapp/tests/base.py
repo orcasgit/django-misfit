@@ -29,8 +29,12 @@ class MisfitTestBase(TestCase):
         self.access_token = self.random_string(25)
         self.misfit_user = self.create_misfit_user(user=self.user)
         self.profile = MisfitProfile({
-            'userId': self.misfit_user_id, 'birthday': '1181-02-15',
-            'name': 'Frodo Baggins', 'gender': 'male'})
+            'userId': self.misfit_user_id,
+            'birthday': '1368-09-22',
+            'name': 'Frodo Baggins',
+            'gender': 'male',
+            'email': 'theringbearer@example.com'
+        })
 
         self.client.login(username=self.username, password=self.password)
 
