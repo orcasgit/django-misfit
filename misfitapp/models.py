@@ -134,10 +134,10 @@ class Profile(MisfitModel):
     GENDER_TYPES = (('male', 'male'), ('female', 'female'))
 
     user = models.ForeignKey(UserModel, unique=True)
-    email = models.EmailField()
+    email = models.EmailField(null=True, blank=True)
     birthday = models.DateField()
     gender = models.CharField(choices=GENDER_TYPES, max_length=6)
-    name = models.TextField()
+    name = models.TextField(null=True, blank=True)
     avatar = models.URLField(null=True, blank=True)
 
     def __str__(self):
@@ -202,9 +202,6 @@ class Goal(MisfitModel):
         return '%s %s %s of %s' % (self.id, self.date, self.points,
                                    self.target_points)
 
-    class Meta:
-        unique_together = ('user', 'date')
-
     @classmethod
     def data_dict(cls, obj):
         result = {
@@ -266,8 +263,6 @@ class Session(MisfitModel):
     def __str__(self):
         return '%s %s %s' % (self.start_time, self.duration,
                              self.activity_type)
-    class Meta:
-        unique_together = ('user', 'start_time')
 
     @classmethod
     def data_dict(cls, obj):
@@ -286,7 +281,7 @@ class Session(MisfitModel):
     def import_from_misfit(cls, misfit, uid, object_id=None):
         data = cls.data_dict(misfit.session(object_id=object_id))
         return cls.objects.update_or_create(
-            user_id=uid, start_time=data['start_time'], defaults=data)
+            id=data['id'], user_id=uid, defaults=data)
 
     @classmethod
     def import_all_from_misfit(cls, misfit, uid,
