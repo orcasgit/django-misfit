@@ -235,7 +235,7 @@ class Goal(MisfitModel):
         for start, end in date_chunks:
             goals = misfit.goal(start_date=start, end_date=end)
             for goal in goals:
-                if goal.date.date() not in exists:
+                if goal.id not in exists:
                     model_data = cls.data_dict(goal)
                     obj_list.append(cls(user_id=uid, **model_data))
         cls.objects.bulk_create(dedupe_by_field(obj_list, 'date'))
@@ -296,7 +296,7 @@ class Session(MisfitModel):
         for start, end in date_chunks:
             sessions = misfit.session(start_date=start, end_date=end)
             for session in sessions:
-                if session.startTime not in exists:
+                if session.id not in exists:
                     model_data = cls.data_dict(session)
                     obj_list.append(cls(user_id=uid, **model_data))
         cls.objects.bulk_create(dedupe_by_field(obj_list, 'start_time'))
@@ -327,13 +327,8 @@ class Sleep(MisfitModel):
         segments = {}
         for misfit_sleep in sleeps:
             data = cls.data_dict(misfit_sleep)
-            try:
-                sleep, created = cls.objects.update_or_create(
-                    id=data['id'], user_id=uid, defaults=data)
-            except:
-                for sleep in sleeps:
-                    print(sleep.data)
-                raise Exception
+            sleep, created = cls.objects.update_or_create(
+                id=data['id'], user_id=uid, defaults=data)
             segments[sleep.id] = misfit_sleep.data['sleepDetails']
             if not created:
                 SleepSegment.objects.filter(sleep=sleep).delete()
