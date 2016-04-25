@@ -2,70 +2,17 @@
 
 import coverage
 import datetime
+import django
 import optparse
 import os
 import sys
 
 from django.conf import settings
+from django.test.utils import get_runner
 
-PROJECT_PATH = os.path.realpath(os.path.dirname(__file__))
 
 if not settings.configured:
-    settings.configure(
-        DATABASES={
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': 'django_misfit',
-            }
-        },
-        INSTALLED_APPS=[
-            'django.contrib.auth',
-            'django.contrib.contenttypes',
-            'django.contrib.messages',
-            'django.contrib.sessions',
-            'misfitapp',
-        ],
-        SECRET_KEY='something-secret',
-        ROOT_URLCONF='misfitapp.urls',
-
-        USE_TZ = True,
-
-        TEMPLATES=[
-            {
-                'BACKEND': 'django.template.backends.django.DjangoTemplates',
-                'APP_DIRS': True,
-                'DIRS': [
-                    os.path.join(PROJECT_PATH, 'misfitapp', 'templates'),
-                    os.path.join(PROJECT_PATH, 'misfitapp', 'tests', 'templates')
-                ],
-            },
-        ],
-
-        MISFIT_CLIENT_ID='FAKE_ID',
-        MISFIT_CLIENT_SECRET='FAKE_SECRET',
-        MISFIT_HISTORIC_TIMEDELTA=datetime.datetime.now() - datetime.datetime(2014, 1, 1),
-
-        LOGGING = {
-            'version': 1,
-            'handlers': {
-                'console': {
-                    'level': 'DEBUG',
-                    'class': 'logging.StreamHandler'
-                },
-            },
-            'loggers': {
-                'misfitapp.tasks': {'handlers': ['console'], 'level': 'DEBUG'},
-            },
-        },
-
-        MIDDLEWARE_CLASSES = (
-            'django.contrib.sessions.middleware.SessionMiddleware',
-            'django.contrib.auth.middleware.AuthenticationMiddleware',
-        )
-    )
-
-
-from django.test.utils import get_runner
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "test_settings")
 
 
 def run_tests():
@@ -87,6 +34,10 @@ def run_tests():
         cov.load()
         cov.start()
 
+    # Now that coverage is started (or not), we can import the django machinery
+    # and start our tests, knowing our imports are covered.
+    django.setup()
+
     TestRunner = get_runner(settings)
     test_runner = TestRunner(verbosity=1, interactive=True, failfast=False)
     exit_val = test_runner.run_tests(tests)
@@ -96,12 +47,6 @@ def run_tests():
         cov.save()
 
     sys.exit(exit_val)
-
-
-import django
-# In Django >= 1.7, we need to run setup first
-if hasattr(django, 'setup'):
-    django.setup()
 
 
 if __name__ == '__main__':
