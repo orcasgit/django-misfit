@@ -46,7 +46,9 @@ class MisfitModel(models.Model):
     @classmethod
     def process_message(cls, message, misfit, uid):
         if message.action == MisfitMessage.DELETED:
-            filters = {'user_id': uid} if cls == Profile else {'pk': message.id}
+            filters = {'pk': message.id}
+            if cls == Profile:
+                filters = {'user_id': uid}
             cls.objects.filter(**filters).delete()
         elif message.action in [MisfitMessage.CREATED, MisfitMessage.UPDATED]:
             return cls.import_from_misfit(misfit, uid, object_id=message.id)
@@ -101,16 +103,18 @@ class Summary(MisfitModel):
                            end_date=datetime.date.today()):
         """
         Imports all Summary data from misfit for the specified date range,
-        chunking API calls if needed. If update is True, update existing records
+        chunking API calls if needed. If update is True, update existing
+        records
         """
         # Keep track of the data we already have
-        exists = cls.objects.filter(user_id=uid,
-                                    date__gte=start_date,
-                                    date__lte=end_date).values_list('date', flat=True)
+        exists = cls.objects.filter(
+            user_id=uid, date__gte=start_date, date__lte=end_date
+        ).values_list('date', flat=True)
         date_chunks = chunkify_dates(start_date, end_date, 30)
         obj_list = []
         for start, end in date_chunks:
-            summaries = misfit.summary(start_date=start, end_date=end, detail=True)
+            summaries = misfit.summary(
+                start_date=start, end_date=end, detail=True)
             for summary in summaries:
                 if update or summary.date.date() not in exists:
                     data = {
@@ -150,11 +154,11 @@ class Profile(MisfitModel):
             'email': profile.email,
             'birthday': profile.birthday,
             'gender': profile.gender,
-            'name': profile.name
+            # These two attributes aren't always included in the API results
+            # despite the fact that the docs say they are not optional
+            'name': getattr(profile, 'name', ''),
+            'avatar': getattr(profile, 'avatar', ''),
         }
-        # Check for the undocumented avatar data
-        if hasattr(profile, 'avatar') and profile.avatar:
-            data['avatar'] = profile.avatar
         return cls.objects.update_or_create(user_id=uid, defaults=data)
 
 
@@ -176,6 +180,9 @@ class Device(MisfitModel):
     @classmethod
     def import_from_misfit(cls, misfit, uid, object_id=None):
         device = misfit.device()
+        if not hasattr(device, 'id'):
+            # This means the user has no device, fail gracefully
+            return False, False
         data = {
             'id': device.id,
             'device_type': device.deviceType,
@@ -218,7 +225,10 @@ class Goal(MisfitModel):
 
     @classmethod
     def import_from_misfit(cls, misfit, uid, object_id=None):
-        data = cls.data_dict(misfit.goal(object_id=object_id))
+        obj = misfit.goal(object_id=object_id)
+        if not hasattr(obj, 'id'):
+            return False, False
+        data = cls.data_dict(obj)
         return cls.objects.update_or_create(
             user_id=uid, id=data['id'], defaults=data)
 
@@ -227,18 +237,21 @@ class Goal(MisfitModel):
                                start_date=HISTORIC_START_DATE,
                                end_date=datetime.date.today()):
         # Keep track of the data we already have
-        exists = cls.objects.filter(user_id=uid,
-                                    date__gte=start_date,
-                                    date__lte=end_date).values_list('date', flat=True)
+        exists = cls.objects.filter(
+            user_id=uid, date__gte=start_date, date__lte=end_date
+        ).values_list('id', flat=True)
         obj_list = []
         date_chunks = chunkify_dates(start_date, end_date, 30)
         for start, end in date_chunks:
             goals = misfit.goal(start_date=start, end_date=end)
             for goal in goals:
+                if not hasattr(goal, 'id'):
+                    # For some reason, goals occasionally have no id, ignore
+                    continue
                 if goal.id not in exists:
                     model_data = cls.data_dict(goal)
                     obj_list.append(cls(user_id=uid, **model_data))
-        cls.objects.bulk_create(dedupe_by_field(obj_list, 'date'))
+        cls.objects.bulk_create(dedupe_by_field(obj_list, 'id'))
 
 
 @python_2_unicode_compatible
@@ -288,9 +301,9 @@ class Session(MisfitModel):
                                start_date=HISTORIC_START_DATE,
                                end_date=datetime.date.today()):
         # Keep track of the data we already have
-        exists = cls.objects.filter(user_id=uid,
-                                    start_time__gte=start_date,
-                                    start_time__lte=end_date).values_list('start_time', flat=True)
+        exists = cls.objects.filter(
+            user_id=uid, start_time__gte=start_date, start_time__lte=end_date
+        ).values_list('id', flat=True)
         obj_list = []
         date_chunks = chunkify_dates(start_date, end_date, 30)
         for start, end in date_chunks:
@@ -299,7 +312,7 @@ class Session(MisfitModel):
                 if session.id not in exists:
                     model_data = cls.data_dict(session)
                     obj_list.append(cls(user_id=uid, **model_data))
-        cls.objects.bulk_create(dedupe_by_field(obj_list, 'start_time'))
+        cls.objects.bulk_create(dedupe_by_field(obj_list, 'id'))
 
 
 @python_2_unicode_compatible
@@ -342,7 +355,8 @@ class Sleep(MisfitModel):
 
     @classmethod
     def import_from_misfit(cls, misfit, uid, object_id=None):
-        cls.import_misfit_sleeps(misfit, uid, [misfit.sleep(object_id=object_id)])
+        cls.import_misfit_sleeps(
+            misfit, uid, [misfit.sleep(object_id=object_id)])
 
     @classmethod
     def import_all_from_misfit(cls, misfit, uid,
@@ -359,7 +373,11 @@ class SleepSegment(models.Model):
     AWAKE = 1
     SLEEP = 2
     DEEP_SLEEP = 3
-    SLEEP_TYPES = ((AWAKE, 'awake'), (SLEEP, 'sleep'), (DEEP_SLEEP, 'deep sleep'))
+    SLEEP_TYPES = (
+        (AWAKE, 'awake'),
+        (SLEEP, 'sleep'),
+        (DEEP_SLEEP, 'deep sleep'),
+    )
 
     sleep = models.ForeignKey(Sleep)
     time = models.DateTimeField()

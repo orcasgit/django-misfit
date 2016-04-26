@@ -3,4 +3,5 @@
 dist
 django_misfit.egg-info
 .coverage
+htmlcov
 env
