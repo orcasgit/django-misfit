@@ -1,3 +1,8 @@
+Version 0.0.4 (2016-05-03)
+==========================
+
+* Increase max_length of the device_type field
+
 Version 0.0.3 (2016-04-26)
 ==========================
 
