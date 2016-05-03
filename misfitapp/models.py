@@ -164,11 +164,9 @@ class Profile(MisfitModel):
 
 @python_2_unicode_compatible
 class Device(MisfitModel):
-    DEVICE_TYPES = (('shine', 'shine'),)
-
     id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
     user = models.ForeignKey(UserModel)
-    device_type = models.CharField(choices=DEVICE_TYPES, max_length=5)
+    device_type = models.CharField(max_length=64)
     serial_number = models.CharField(max_length=100)
     firmware_version = models.CharField(max_length=100)
     battery_level = models.SmallIntegerField()
