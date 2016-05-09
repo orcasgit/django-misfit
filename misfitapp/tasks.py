@@ -3,24 +3,15 @@ import logging
 import sys
 
 from celery import shared_task
+from celery.contrib import rdb
 from celery.exceptions import Reject
 from cryptography.exceptions import InvalidSignature
 from django.core.cache import cache
 from datetime import timedelta, date
-from misfit.exceptions import MisfitRateLimitError
+from misfit.exceptions import MisfitBadRequest, MisfitRateLimitError
 from misfit.notification import MisfitNotification
 
-from . import utils
-from .models import (
-    MisfitUser,
-    Profile,
-    Device,
-    Session,
-    Sleep,
-    SleepSegment,
-    Summary,
-    Goal
-)
+from . import models, utils
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +32,8 @@ def import_historical(misfit_user):
     Spin off a new task for each data type. If there is existing data,
     it is not overwritten.
     """
-    for cls in (Profile, Device, Summary, Goal, Session, Sleep):
-        import_historical_cls.delay(cls, misfit_user)
+    for cls in ('Profile', 'Device', 'Summary', 'Goal', 'Session', 'Sleep',):
+        import_historical_cls.delay(getattr(models, cls), misfit_user)
 
 
 @shared_task
@@ -79,44 +70,46 @@ def process_notification(content):
         for message in notification.Message:
             ownerId = message.ownerId
             try:
-                mfuser = MisfitUser.objects.get(misfit_user_id=ownerId)
-            except MisfitUser.DoesNotExist:
+                mfuser = models.MisfitUser.objects.get(misfit_user_id=ownerId)
+            except models.MisfitUser.DoesNotExist:
                 logger.warning('Received a notification for a user who is not '
                                'in our database with id: %s' % ownerId)
                 continue
             misfit = utils.create_misfit(access_token=mfuser.access_token)
 
             uid = mfuser.user_id
-            if message.type == 'profiles':
-                Profile.process_message(message, misfit, uid)
-            elif message.type == 'devices':
-                Device.process_message(message, misfit, uid)
-            elif message.type == 'sessions':
-                Session.process_message(message, misfit, uid)
-            elif message.type == 'sleeps':
-                Sleep.process_message(message, misfit, uid)
-            elif message.type == 'goals':
-                goal, created = Goal.process_message(message, misfit, uid)
-
-                if goal:
-                    # Adjust date range for later summary retrieval
-                    # For whatever reason, the end_date is not inclusive, so
-                    # we add a day
-                    next_day = goal.date + arrow.util.timedelta(days=1)
-                    if ownerId not in summaries:
-                        summaries[ownerId] = {
-                            'misfit': misfit,
-                            'mfuser_id': mfuser.user_id,
-                            'date_range': {'start': goal.date, 'end': next_day}
-                        }
-                    elif goal.date < summaries[ownerId]['date_range']['start']:
-                        summaries[ownerId]['date_range']['start'] = goal.date
-                    elif goal.date > summaries[ownerId]['date_range']['end']:
-                        summaries[ownerId]['date_range']['end'] = next_day
+            try:
+                # Try to get the appropriate Misfit model based on message type
+                misfit_class = getattr(models, message.type.capitalize()[0:-1])
+                # Run the class's processing on the message
+                mf_obj, _ = misfit_class.process_message(message, misfit, uid)
+            except AttributeError:
+                logger.exception('Received unknown misfit notification type' +
+                                 message.type)
+            except MisfitBadRequest:
+                logger.exception(
+                    'Error while processing {0} message with id {1}'.format(
+                        message.type, message.id)
+                )
+            if message.type == 'goals' and mf_obj:
+                # Adjust date range for later summary retrieval
+                # For whatever reason, the end_date is not inclusive, so
+                # we add a day
+                next_day = mf_obj.date + arrow.util.timedelta(days=1)
+                if ownerId not in summaries:
+                    summaries[ownerId] = {
+                        'misfit': misfit,
+                        'mfuser_id': mfuser.user_id,
+                        'date_range': {'start': mf_obj.date, 'end': next_day}
+                    }
+                elif mf_obj.date < summaries[ownerId]['date_range']['start']:
+                    summaries[ownerId]['date_range']['start'] = mf_obj.date
+                elif mf_obj.date > summaries[ownerId]['date_range']['end']:
+                    summaries[ownerId]['date_range']['end'] = next_day
 
         # Use the date ranges we built to get updated summary data
         for ownerId, summary in summaries.items():
-            Summary.import_from_misfit(
+            models.Summary.import_from_misfit(
                 summary['misfit'], summary['mfuser_id'], update=True,
                 start_date=summary['date_range']['start'],
                 end_date=summary['date_range']['end'])
