@@ -1,3 +1,8 @@
+Version 0.0.5 (2016-05-09)
+==========================
+
+* Fix an IntegrityError with importing historic Session data
+
 Version 0.0.4 (2016-05-03)
 ==========================
 
