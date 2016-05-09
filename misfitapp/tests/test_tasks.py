@@ -476,7 +476,6 @@ class TestNotificationTask(MisfitTestBase):
         eq_(Profile.objects.filter(user=self.user).count(), 0)
         eq_(Summary.objects.filter(user=self.user).count(), 0)
 
-
     @patch('misfit.notification.MisfitNotification.verify_signature')
     @patch('celery.app.task.Task.delay')
     @patch('logging.Logger.warning')
