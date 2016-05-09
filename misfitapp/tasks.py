@@ -3,7 +3,6 @@ import logging
 import sys
 
 from celery import shared_task
-from celery.contrib import rdb
 from celery.exceptions import Reject
 from cryptography.exceptions import InvalidSignature
 from django.core.cache import cache
