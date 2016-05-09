@@ -156,7 +156,8 @@ class TestImportHistoricalTask(MisfitTestBase):
 
     @patch('misfitapp.models.chunkify_dates')
     @patch('misfit.notification.MisfitNotification.verify_signature')
-    def test_import_historical(self, verify_signature_mock, chunkify_dates_mock):
+    def test_import_historical(self, verify_signature_mock,
+                               chunkify_dates_mock):
         chunkify_dates_mock.return_value = [
             (datetime.date(2014, 1, 1), datetime.date(2014, 1, 31)),
             (datetime.date(2014, 1, 31), datetime.date(2014, 3, 2)),
@@ -336,8 +337,8 @@ class TestNotificationTask(MisfitTestBase):
     @patch('celery.app.task.Task.delay')
     @patch('misfit.Misfit.goal')
     @patch('celery.app.task.Task.retry')
-    def test_notification_rate_limit(self, mock_retry, mock_goal, mock_delay,
-                                     verify_signature_mock, debug_mock):
+    def test_notification_rate_limit1(self, mock_retry, mock_goal, mock_delay,
+                                      verify_signature_mock, debug_mock):
         """ Test that the notification task rate limit errors ok """
         # Check that we fail gracefully when we hit the rate limit
         mock_delay.side_effect = lambda arg: process_notification(arg)
@@ -360,6 +361,97 @@ class TestNotificationTask(MisfitTestBase):
         eq_(Goal.objects.filter(user=self.user).count(), 0)
         eq_(Profile.objects.filter(user=self.user).count(), 1)
         eq_(Summary.objects.filter(user=self.user).count(), 0)
+
+    @freeze_time("2014-07-02 10:52:00", tz_offset=0)
+    @patch('logging.Logger.debug')
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('celery.app.task.Task.delay')
+    @patch('misfit.Misfit.summary')
+    @patch('celery.app.task.Task.retry')
+    def test_notification_rate_limit2(self, mock_retry, mock_summ, mock_delay,
+                                      verify_signature_mock, debug_mock):
+        """ Test that the notification task rate limit errors ok """
+        # Check that we fail gracefully when we hit the rate limit
+        mock_delay.side_effect = lambda arg: process_notification(arg)
+        resp = MagicMock()
+        resp.headers = {'x-ratelimit-reset': 1404298869}
+        exc = misfit_exceptions.MisfitRateLimitError(429, '', resp)
+        mock_summ.side_effect = exc
+        mock_retry.side_effect = Exception
+        with HTTMock(JsonMock().goal_http,
+                     JsonMock().profile_http,
+                     JsonMock('summary_detail').summary_http):
+            try:
+                content = json.dumps(self.notification_content).encode('utf8')
+                self.client.post(reverse('misfit-notification'), data=content,
+                                 content_type='application/json')
+                assert False, 'We should have raised an exception'
+            except Exception:
+                assert True
+        mock_delay.assert_called_once_with(content)
+        mock_summ.assert_called_once_with(
+            detail=True,
+            end_date=datetime.date(2014, 10, 8),
+            start_date=datetime.date(2014, 10, 5))
+        mock_retry.assert_called_once_with(countdown=549)
+        eq_(Goal.objects.filter(user=self.user).count(), 2)
+        eq_(Profile.objects.filter(user=self.user).count(), 1)
+        eq_(Summary.objects.filter(user=self.user).count(), 0)
+
+    @patch('logging.Logger.exception')
+    @patch('celery.app.task.Task.delay')
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('misfitapp.models.Profile.process_message')
+    def test_notification_badrequest(self, mock_process, mock_verify,
+                                     mock_delay, mock_exc):
+        """ Test that the notification task handles badrequest errors ok """
+        # Check that we fail gracefully when we run into bad request errors
+        mock_delay.side_effect = lambda arg: process_notification(arg)
+        mock_process.side_effect = misfit_exceptions.MisfitBadRequest(
+            400, 'Object not found')
+        try:
+            with HTTMock(JsonMock().goal_http,
+                         JsonMock().profile_http,
+                         JsonMock('summary_detail').summary_http):
+                content = json.dumps(self.notification_content).encode('utf8')
+                self.client.post(reverse('misfit-notification'), data=content,
+                                 content_type='application/json')
+        except Exception:
+            assert False, 'We should not have raised an exception'
+        mock_exc.assert_called_once_with(
+            'Error while processing profiles message with id 1234')
+        # We retrieve data for other types in the notification, even though
+        # there was an error processing the profile update
+        eq_(Goal.objects.filter(user=self.user).count(), 2)
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
+        eq_(Summary.objects.filter(user=self.user).count(), 3)
+
+    @patch('logging.Logger.exception')
+    @patch('celery.app.task.Task.delay')
+    @patch('misfit.notification.MisfitNotification.verify_signature')
+    @patch('misfitapp.models.Profile.process_message')
+    def test_notification_process_error(self, mock_process, mock_verify,
+                                        mock_delay, mock_exc):
+        """ Test that the notification task handles errors while processing """
+        # Check that we continue to get other data types after generic error
+        mock_delay.side_effect = lambda arg: process_notification(arg)
+        mock_process.side_effect = Exception('WHA HAPPENED?')
+        try:
+            with HTTMock(JsonMock().goal_http,
+                         JsonMock().profile_http,
+                         JsonMock('summary_detail').summary_http):
+                content = json.dumps(self.notification_content).encode('utf8')
+                self.client.post(reverse('misfit-notification'), data=content,
+                                 content_type='application/json')
+        except Exception:
+            assert False, 'We should not have raised an exception'
+        mock_exc.assert_called_once_with(
+            'Generic exception while processing profiles data: WHA HAPPENED?')
+        # We retrieve data for other types in the notification, even though
+        # there was an error processing the profile update
+        eq_(Goal.objects.filter(user=self.user).count(), 2)
+        eq_(Profile.objects.filter(user=self.user).count(), 0)
+        eq_(Summary.objects.filter(user=self.user).count(), 3)
 
     @patch('logging.Logger.exception')
     @patch('celery.app.task.Task.delay')
