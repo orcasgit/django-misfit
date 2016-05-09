@@ -82,7 +82,7 @@ def process_notification(content):
                 # Try to get the appropriate Misfit model based on message type
                 misfit_class = getattr(models, message.type.capitalize()[0:-1])
                 # Run the class's processing on the message
-                mf_obj, _ = misfit_class.process_message(message, misfit, uid)
+                obj, _ = misfit_class.process_message(message, misfit, uid)
             except AttributeError:
                 logger.exception('Received unknown misfit notification type' +
                                  message.type)
@@ -91,31 +91,40 @@ def process_notification(content):
                     'Error while processing {0} message with id {1}'.format(
                         message.type, message.id)
                 )
-            if message.type == 'goals' and mf_obj:
-                # Adjust date range for later summary retrieval
-                # For whatever reason, the end_date is not inclusive, so
-                # we add a day
-                next_day = mf_obj.date + arrow.util.timedelta(days=1)
-                if ownerId not in summaries:
-                    summaries[ownerId] = {
-                        'misfit': misfit,
-                        'mfuser_id': mfuser.user_id,
-                        'date_range': {'start': mf_obj.date, 'end': next_day}
-                    }
-                elif mf_obj.date < summaries[ownerId]['date_range']['start']:
-                    summaries[ownerId]['date_range']['start'] = mf_obj.date
-                elif mf_obj.date > summaries[ownerId]['date_range']['end']:
-                    summaries[ownerId]['date_range']['end'] = next_day
+            except MisfitRateLimitError:
+                raise misfit_retry_exc(process_notification, sys.exc_info()[1])
+            except Exception:
+                logger.exception(
+                    'Generic exception while processing {0} data: {1}'.format(
+                        message.type, sys.exc_info()[1])
+                )
+            else:
+                if message.type == 'goals' and obj:
+                    # Adjust date range for later summary retrieval
+                    # For whatever reason, the end_date is not inclusive, so
+                    # we add a day
+                    goal = obj
+                    next_day = goal.date + arrow.util.timedelta(days=1)
+                    if ownerId not in summaries:
+                        summaries[ownerId] = {
+                            'misfit': misfit,
+                            'mfuser_id': mfuser.user_id,
+                            'date_range': {'start': goal.date, 'end': next_day}
+                        }
+                    elif goal.date < summaries[ownerId]['date_range']['start']:
+                        summaries[ownerId]['date_range']['start'] = goal.date
+                    elif goal.date > summaries[ownerId]['date_range']['end']:
+                        summaries[ownerId]['date_range']['end'] = next_day
 
         # Use the date ranges we built to get updated summary data
         for ownerId, summary in summaries.items():
-            models.Summary.import_from_misfit(
-                summary['misfit'], summary['mfuser_id'], update=True,
-                start_date=summary['date_range']['start'],
-                end_date=summary['date_range']['end'])
-
-    except MisfitRateLimitError:
-        raise misfit_retry_exc(process_notification, sys.exc_info()[1])
+            try:
+                models.Summary.import_from_misfit(
+                    summary['misfit'], summary['mfuser_id'], update=True,
+                    start_date=summary['date_range']['start'],
+                    end_date=summary['date_range']['end'])
+            except MisfitRateLimitError:
+                raise misfit_retry_exc(process_notification, sys.exc_info()[1])
     except Exception:
         exc = sys.exc_info()[1]
         logger.exception("Unknown exception processing notification: %s" % exc)
