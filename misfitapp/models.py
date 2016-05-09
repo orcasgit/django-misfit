@@ -300,7 +300,9 @@ class Session(MisfitModel):
                                end_date=datetime.date.today()):
         # Keep track of the data we already have
         exists = cls.objects.filter(
-            user_id=uid, start_time__gte=start_date, start_time__lte=end_date
+            user_id=uid,
+            start_time__gte=start_date,
+            start_time__lt=end_date + datetime.timedelta(days=1)
         ).values_list('id', flat=True)
         obj_list = []
         date_chunks = chunkify_dates(start_date, end_date, 30)
