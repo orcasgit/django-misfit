@@ -1,3 +1,8 @@
+Version 0.0.6 (2016-05-09)
+==========================
+
+* Make notification processing more robust
+
 Version 0.0.5 (2016-05-09)
 ==========================
 
