@@ -1,3 +1,9 @@
+Version 0.0.7 (2016-11-03)
+==========================
+
+* Add docstrings to all models, help_text to all fields
+* Upgrade misfit to a version that installs with newer openssl
+
 Version 0.0.6 (2016-05-09)
 ==========================
 
