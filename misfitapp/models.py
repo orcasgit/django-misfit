@@ -72,10 +72,19 @@ class MisfitModel(models.Model):
 
 @python_2_unicode_compatible
 class MisfitUser(models.Model):
-    user = models.ForeignKey(UserModel)
-    misfit_user_id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    access_token = models.TextField()
-    last_update = models.DateTimeField(null=True, blank=True)
+    """ A user's Misfit credentials, allowing API access """
+    user = models.ForeignKey(UserModel, help_text='The user')
+    misfit_user_id = models.CharField(
+        max_length=MAX_KEY_LEN,
+        primary_key=True,
+        help_text='The Misfit user ID')
+    access_token = models.TextField(help_text='The OAuth access token')
+    last_update = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            'The datetime when the misfit user was last updated (deprecated)'
+        ))
 
     def __str__(self):
         return self.user.get_username()
@@ -83,13 +92,19 @@ class MisfitUser(models.Model):
 
 @python_2_unicode_compatible
 class Summary(MisfitModel):
-    user = models.ForeignKey(UserModel)
-    date = models.DateField()
-    points = models.FloatField()
-    steps = models.IntegerField()
-    calories = models.FloatField()
-    activity_calories = models.FloatField()
-    distance = models.FloatField()
+    """
+    Misfit daily summary data point:
+    https://build.misfit.com/docs/cloudapi/api_references#summary
+    """
+    user = models.ForeignKey(UserModel, help_text="The summary's user")
+    date = models.DateField(help_text='The date of the summary')
+    points = models.FloatField(help_text='Points for the day')
+    steps = models.IntegerField(help_text='Steps for the day')
+    calories = models.FloatField(help_text='Calories for the day')
+    activity_calories = models.FloatField(
+        help_text='Activity calories for the day')
+    distance = models.FloatField(
+        help_text='Distance traveled during the day, in miles')
 
     def __str__(self):
         return '%s: %s' % (self.date.strftime('%Y-%m-%d'), self.steps)
@@ -135,14 +150,28 @@ class Summary(MisfitModel):
 
 @python_2_unicode_compatible
 class Profile(MisfitModel):
+    """
+    Misfit profile information:
+    https://build.misfit.com/docs/cloudapi/api_references#profile
+    """
     GENDER_TYPES = (('male', 'male'), ('female', 'female'))
 
-    user = models.ForeignKey(UserModel, unique=True)
-    email = models.EmailField(null=True, blank=True)
-    birthday = models.DateField()
-    gender = models.CharField(choices=GENDER_TYPES, max_length=6)
-    name = models.TextField(null=True, blank=True)
-    avatar = models.URLField(null=True, blank=True)
+    user = models.OneToOneField(
+        UserModel,
+        related_name='misfit_profile',
+        help_text="The profile's user")
+    email = models.EmailField(null=True, blank=True, help_text='Email address')
+    birthday = models.DateField(help_text="The user's birth date")
+    gender = models.CharField(
+        choices=GENDER_TYPES,
+        max_length=6,
+        help_text="The user's gender, one of: {}".format(
+            ', '.join([c for c, _ in GENDER_TYPES])
+        ))
+    name = models.TextField(
+        null=True, blank=True, help_text='The name on the profile')
+    avatar = models.URLField(
+        null=True, blank=True, help_text="URL to the profile's avatar")
 
     def __str__(self):
         return self.email
@@ -164,13 +193,26 @@ class Profile(MisfitModel):
 
 @python_2_unicode_compatible
 class Device(MisfitModel):
-    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(UserModel)
-    device_type = models.CharField(max_length=64)
-    serial_number = models.CharField(max_length=100)
-    firmware_version = models.CharField(max_length=100)
-    battery_level = models.SmallIntegerField()
-    last_sync_time = models.DateTimeField(null=True, blank=True)
+    """
+    A Misfit device:
+    https://build.misfit.com/docs/cloudapi/api_references#device
+    """
+    id = models.CharField(
+        max_length=MAX_KEY_LEN,
+        primary_key=True,
+        help_text='The device ID assigned by Misfit')
+    user = models.ForeignKey(UserModel, help_text="The device's user")
+    device_type = models.CharField(
+        max_length=64,
+        help_text='The device type as a human readable string')
+    serial_number = models.CharField(
+        max_length=100, help_text="The device's serial number")
+    firmware_version = models.CharField(
+        max_length=100, help_text="The version of the device's firmware")
+    battery_level = models.SmallIntegerField(
+        help_text='Percentage battery remaining')
+    last_sync_time = models.DateTimeField(
+        null=True, blank=True, help_text='Datetime the device was last synced')
 
     def __str__(self):
         return '%s: %s' % (self.device_type, self.serial_number)
@@ -196,12 +238,21 @@ class Device(MisfitModel):
 
 @python_2_unicode_compatible
 class Goal(MisfitModel):
-    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(UserModel)
-    date = models.DateField()
-    points = models.FloatField()
-    target_points = models.IntegerField()
-    time_zone_offset = models.SmallIntegerField(default=0)
+    """
+    A Misfit goal:
+    https://build.misfit.com/docs/cloudapi/api_references#goal
+    """
+    id = models.CharField(
+        max_length=MAX_KEY_LEN,
+        primary_key=True,
+        help_text='The goal ID assigned by Misfit')
+    user = models.ForeignKey(UserModel, help_text="The goal's user")
+    date = models.DateField(help_text='Date of the goal')
+    points = models.FloatField(
+        help_text='Progress points that the user achieved that day')
+    target_points = models.IntegerField(help_text='Target points for that day')
+    time_zone_offset = models.SmallIntegerField(
+        default=0, help_text='Timezone offset from UTC')
 
     def __str__(self):
         return '%s %s %s of %s' % (self.id, self.date, self.points,
@@ -254,6 +305,10 @@ class Goal(MisfitModel):
 
 @python_2_unicode_compatible
 class Session(MisfitModel):
+    """
+    A Misfit session:
+    https://build.misfit.com/docs/cloudapi/api_references#session
+    """
     ACTIVITY_TYPES = (('cycling', 'cycling'),
                       ('swimming', 'swimming'),
                       ('walking', 'walking'),
@@ -261,15 +316,29 @@ class Session(MisfitModel):
                       ('basketball', 'basketball'),
                       ('soccer', 'soccer'))
 
-    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(UserModel)
-    activity_type = models.CharField(choices=ACTIVITY_TYPES, max_length=15)
-    start_time = models.DateTimeField()
-    duration = models.IntegerField()
-    points = models.FloatField(null=True)
-    steps = models.IntegerField(null=True)
-    calories = models.FloatField(null=True)
-    distance = models.FloatField(null=True)
+    id = models.CharField(
+        max_length=MAX_KEY_LEN,
+        primary_key=True,
+        help_text='Session ID assigned by Misfit')
+    user = models.ForeignKey(UserModel, help_text="The session's user")
+    activity_type = models.CharField(
+        choices=ACTIVITY_TYPES,
+        max_length=15,
+        help_text="The session's activity type, one of: {}".format(
+            ', '.join([c for c, _ in ACTIVITY_TYPES])
+        ))
+    start_time = models.DateTimeField(help_text='Datetime the session started')
+    duration = models.IntegerField(
+        help_text='Length of the activity, in seconds')
+    points = models.FloatField(
+        null=True, help_text='Total points user gained for the activity')
+    steps = models.IntegerField(
+        null=True, help_text='Total steps user took for the activity')
+    calories = models.FloatField(
+        null=True, help_text='Total calories user burned for the activity')
+    distance = models.FloatField(
+        null=True,
+        help_text='Total distance user covered for the activity, in miles')
 
     def __str__(self):
         return '%s %s %s' % (self.start_time, self.duration,
@@ -317,11 +386,21 @@ class Session(MisfitModel):
 
 @python_2_unicode_compatible
 class Sleep(MisfitModel):
-    id = models.CharField(max_length=MAX_KEY_LEN, primary_key=True)
-    user = models.ForeignKey(UserModel)
-    auto_detected = models.BooleanField(default=True)
-    start_time = models.DateTimeField()
-    duration = models.IntegerField()
+    """
+    A Misfit sleep session:
+    https://build.misfit.com/docs/cloudapi/api_references#sleep
+    """
+    id = models.CharField(
+        max_length=MAX_KEY_LEN,
+        primary_key=True,
+        help_text='The sleep ID assigned by Misfit')
+    user = models.ForeignKey(UserModel, help_text="The sleep session's user")
+    auto_detected = models.BooleanField(
+        default=True, help_text='Was the sleep session auto-detected?')
+    start_time = models.DateTimeField(
+        help_text='Datetime the sleep session started')
+    duration = models.IntegerField(
+        help_text='Duration of the sleep session, in seconds')
 
     def __str__(self):
         return '%s %s' % (self.start_time, self.duration)
@@ -370,6 +449,9 @@ class Sleep(MisfitModel):
 
 @python_2_unicode_compatible
 class SleepSegment(models.Model):
+    """
+    A segment of sleep, part of a sleep session (Sleep)
+    """
     AWAKE = 1
     SLEEP = 2
     DEEP_SLEEP = 3
@@ -379,9 +461,13 @@ class SleepSegment(models.Model):
         (DEEP_SLEEP, 'deep sleep'),
     )
 
-    sleep = models.ForeignKey(Sleep)
-    time = models.DateTimeField()
-    sleep_type = models.SmallIntegerField(choices=SLEEP_TYPES)
+    sleep = models.ForeignKey(Sleep, help_text="The segment's sleep session")
+    time = models.DateTimeField(help_text='The datetime of the segment')
+    sleep_type = models.SmallIntegerField(
+        choices=SLEEP_TYPES,
+        help_text="The sleep segment's type, one of: {}".format(
+            ', '.join(['{}({})'.format(ci, cs) for ci, cs in SLEEP_TYPES])
+        ))
 
     def __str__(self):
         return '%s %s' % (self.time, self.sleep_type)
